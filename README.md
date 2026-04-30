@@ -157,10 +157,12 @@ Demo emails created by the seed:
 - Zonas amplias como estructura principal: `Madrid Centro`, `Madrid Norte`, `Madrid Sur`, `Madrid Este` y `Madrid Oeste`.
 - Ubicacion concreta opcional en cada reto mediante `Challenge.locationName`.
 - `/matches` y `/matches/[id]` para abrir mesa, completar plazas, configurar equipos, iniciar partida y cerrar resultado.
+- `/invite?code=XXXX` como puerta publica para invitados que aun no tienen cuenta.
 - `/dashboard` con ELO actual, zona principal, retos cercanos, partidas recientes y accesos rapidos.
 - `/profile` con estadisticas reales, historial y movimientos de ELO.
 - `/rankings` con clasificacion global y por zona basada en ELO real.
 - Sistema visual verde botella premium en landing, shell y pantallas de juego.
+- Invitaciones simples con enlace publico, deep link de reto y acciones rapidas para compartir por WhatsApp.
 
 ## Challenge states
 
@@ -182,6 +184,17 @@ Current active flow:
 4. `IN_PROGRESS`
 5. `RESULT_SUBMITTED`
 6. `CONFIRMED` or `DISPUTED`
+
+## Invitation flow
+
+- Cada reto nuevo genera un `inviteCode` corto para compartir enlaces tipo `/invite?code=XXXX`.
+- El detalle de `/matches/[id]` permite:
+  - copiar invitacion publica
+  - copiar enlace directo del reto
+  - compartir por WhatsApp
+- Un visitante sin cuenta puede abrir `/invite?code=XXXX`, ver la informacion basica de la mesa y crear cuenta para unirse.
+- `redirectTo` se conserva entre `/login`, `/register` y `/onboarding` para que el usuario termine en el reto al completar el acceso.
+- Un jugador autenticado con perfil completo puede entrar desde la invitacion y usar directamente `Unirse al reto`.
 
 ## Lobby flow
 
@@ -246,6 +259,7 @@ K-factor by format:
 
 - `rating` remains in the schema as a compatibility field and is synchronized with `elo`.
 - ELO is applied only once per confirmed match through `Match.eloAppliedAt`.
+- `Challenge.inviteCode` queda preparado para enlaces publicos de invitacion y puede convivir temporalmente con retos antiguos sin codigo.
 - The dev seed is safe to run without `SUPABASE_SERVICE_ROLE_KEY`; only Auth demo-account provisioning becomes optional.
 - `proxy.ts` lives at the project root so Next.js 16.2.4 can resolve the proxy module correctly in a `src/app` project.
 - Chat, notifications, advanced dispute resolution and team-league standings remain out of scope.

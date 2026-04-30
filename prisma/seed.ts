@@ -9,6 +9,7 @@ import {
   LobbyTeamSlot,
   MatchFormat,
   MatchStatus,
+  Prisma,
   PrismaClient,
   UserRole,
 } from "../src/generated/prisma/client";
@@ -335,6 +336,17 @@ const confirmedMatches: ConfirmedMatchSeed[] = [
 
 function getAvatarUrl(displayName: string) {
   return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(displayName)}`;
+}
+
+function getSeedInviteCode(...parts: string[]) {
+  const input = parts.join(":");
+  let hash = 0;
+
+  for (const character of input) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+
+  return hash.toString(36).toUpperCase().padStart(8, "0").slice(0, 8);
 }
 
 function getDemoUserId(email: string) {
@@ -710,6 +722,7 @@ async function createOpenChallengeSeed(options: {
   zonesBySlug: Map<string, string>;
   demoProfilesByEmail: Map<string, DemoProfileState>;
   seed: OpenChallengeSeed;
+  seedIndex: number;
 }) {
   const leagueId = options.zonesBySlug.get(options.seed.leagueSlug);
   const creator = options.demoProfilesByEmail.get(options.seed.creatorEmail);
@@ -718,15 +731,25 @@ async function createOpenChallengeSeed(options: {
     throw new Error(`Missing league or creator for open challenge ${options.seed.description}.`);
   }
 
+  const challengeData: Prisma.ChallengeUncheckedCreateInput = {
+    inviteCode: getSeedInviteCode(
+      "OPEN",
+      options.seed.leagueSlug,
+      options.seed.creatorEmail,
+      options.seedIndex.toString(),
+    ),
+    leagueId,
+    creatorId: creator.userId,
+    matchFormat: options.seed.matchFormat,
+    status: options.seed.status,
+    description: options.seed.description,
+    locationName: options.seed.locationName ?? null,
+    proposedAt: options.seed.proposedAt ? new Date(options.seed.proposedAt) : null,
+  };
+
   await prisma.challenge.create({
     data: {
-      leagueId,
-      creatorId: creator.userId,
-      matchFormat: options.seed.matchFormat,
-      status: options.seed.status,
-      description: options.seed.description,
-      locationName: options.seed.locationName ?? null,
-      proposedAt: options.seed.proposedAt ? new Date(options.seed.proposedAt) : null,
+      ...challengeData,
       participants: {
         create: options.seed.participants.map((participant) => {
           const profile = options.demoProfilesByEmail.get(participant.email);
@@ -750,6 +773,7 @@ async function createConfirmedMatchSeed(options: {
   zonesBySlug: Map<string, string>;
   demoProfilesByEmail: Map<string, DemoProfileState>;
   seed: ConfirmedMatchSeed;
+  seedIndex: number;
 }) {
   const leagueId = options.zonesBySlug.get(options.seed.leagueSlug);
   const creator = options.demoProfilesByEmail.get(options.seed.creatorEmail);
@@ -776,17 +800,27 @@ async function createConfirmedMatchSeed(options: {
   const startedAt = new Date(options.seed.startedAt);
   const endedAt = new Date(options.seed.endedAt);
 
+  const challengeData: Prisma.ChallengeUncheckedCreateInput = {
+    inviteCode: getSeedInviteCode(
+      "MATCH",
+      options.seed.leagueSlug,
+      options.seed.creatorEmail,
+      options.seedIndex.toString(),
+    ),
+    leagueId,
+    creatorId: creator.userId,
+    matchFormat: options.seed.matchFormat,
+    status: ChallengeStatus.CONFIRMED,
+    description: options.seed.description,
+    locationName: options.seed.locationName ?? null,
+    proposedAt: options.seed.proposedAt ? new Date(options.seed.proposedAt) : startedAt,
+    startedAt,
+    teamsLockedAt: startedAt,
+  };
+
   const challenge = await prisma.challenge.create({
     data: {
-      leagueId,
-      creatorId: creator.userId,
-      matchFormat: options.seed.matchFormat,
-      status: ChallengeStatus.CONFIRMED,
-      description: options.seed.description,
-      locationName: options.seed.locationName ?? null,
-      proposedAt: options.seed.proposedAt ? new Date(options.seed.proposedAt) : startedAt,
-      startedAt,
-      teamsLockedAt: startedAt,
+      ...challengeData,
       participants: {
         create: [
           ...typedTeamA.map((player, index) => ({
@@ -935,19 +969,21 @@ async function seedDemoData(zonesBySlug: Map<string, string>) {
     demoAuthUsersByEmail,
   });
 
-  for (const challenge of openChallenges) {
+  for (const [seedIndex, challenge] of openChallenges.entries()) {
     await createOpenChallengeSeed({
       zonesBySlug,
       demoProfilesByEmail,
       seed: challenge,
+      seedIndex,
     });
   }
 
-  for (const match of confirmedMatches) {
+  for (const [seedIndex, match] of confirmedMatches.entries()) {
     await createConfirmedMatchSeed({
       zonesBySlug,
       demoProfilesByEmail,
       seed: match,
+      seedIndex,
     });
   }
 

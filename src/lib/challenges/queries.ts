@@ -28,7 +28,9 @@ export type ChallengeFeedItem = Prisma.ChallengeGetPayload<{
       };
     };
   };
-}>;
+}> & {
+  inviteCode: string | null;
+};
 
 export type ChallengeDetail = Prisma.ChallengeGetPayload<{
   include: {
@@ -84,7 +86,9 @@ export type ChallengeDetail = Prisma.ChallengeGetPayload<{
       };
     };
   };
-}>;
+}> & {
+  inviteCode: string | null;
+};
 
 export type MatchHistoryItem = Prisma.MatchGetPayload<{
   include: {
@@ -441,4 +445,69 @@ export async function getChallengeByIdOrThrow(challengeId: string): Promise<Chal
   }
 
   return challenge;
+}
+
+export async function getChallengeByInviteCode(
+  inviteCode: string,
+): Promise<ChallengeDetail | null> {
+  const prisma = getPrismaClient();
+
+  return prisma.challenge.findUnique({
+    where: {
+      inviteCode: inviteCode.trim().toUpperCase(),
+    } as Prisma.ChallengeWhereUniqueInput,
+    include: {
+      league: true,
+      creator: true,
+      participants: {
+        include: {
+          user: {
+            include: {
+              profile: {
+                include: {
+                  preferredLeague: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          seatIndex: "asc",
+        },
+      },
+      match: {
+        include: {
+          submittedBy: true,
+          confirmedBy: true,
+          eloHistory: {
+            include: {
+              playerProfile: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+            orderBy: {
+              delta: "desc",
+            },
+          },
+          matchTeams: {
+            include: {
+              players: {
+                include: {
+                  user: true,
+                },
+                orderBy: {
+                  seatIndex: "asc",
+                },
+              },
+            },
+            orderBy: {
+              slot: "asc",
+            },
+          },
+        },
+      },
+    },
+  });
 }

@@ -18,7 +18,7 @@ export default async function OnboardingPage({
 }) {
   const resolvedSearchParams = await searchParams;
   const redirectTo = sanitizeRedirectPath(resolvedSearchParams.redirectTo ?? null);
-  const { authUser, appUser, profile } = await requireAuthenticatedUser();
+  const { authUser, appUser, profile } = await requireAuthenticatedUser(redirectTo);
   const leagueOptions = await getLeagueSelectionOptions();
 
   if (profile?.preferredLeagueId) {

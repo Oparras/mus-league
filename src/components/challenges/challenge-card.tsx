@@ -5,19 +5,10 @@ import { Avatar, AvatarFallback, AvatarGroup, AvatarImage } from "@/components/u
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChallengeStatusBadge } from "@/components/challenges/challenge-status-badge";
 import { MatchFormatBadge } from "@/components/challenges/match-format-badge";
-
-function formatProposedAt(date: Date | null) {
-  if (!date) {
-    return "Horario flexible";
-  }
-
-  return new Intl.DateTimeFormat("es-ES", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
+import {
+  formatChallengeProposedAt,
+  getChallengeSeatsLabel,
+} from "@/lib/challenges/links";
 
 export function ChallengeCard({
   challenge,
@@ -26,6 +17,8 @@ export function ChallengeCard({
   challenge: ChallengeFeedItem;
   compact?: boolean;
 }) {
+  const seatsLabel = getChallengeSeatsLabel(challenge.participants.length);
+
   return (
     <Link href={`/matches/${challenge.id}`} className="block h-full">
       <Card className="h-full border-border/80 bg-card/95 transition-all hover:-translate-y-0.5 hover:ring-primary/20">
@@ -66,13 +59,14 @@ export function ChallengeCard({
               <p className="mt-2 font-medium text-foreground">
                 {challenge.participants.length}/4
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">{seatsLabel}</p>
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/70 px-4 py-3">
               <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 Hora
               </p>
               <p className="mt-2 font-medium text-foreground">
-                {formatProposedAt(challenge.proposedAt)}
+                {formatChallengeProposedAt(challenge.proposedAt)}
               </p>
             </div>
           </div>

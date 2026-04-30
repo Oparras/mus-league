@@ -5,6 +5,7 @@ import { SubmitButton } from "@/components/auth/submit-button";
 import { ChallengeLobbyBoard } from "@/components/challenges/challenge-lobby-board";
 import { ChallengeStatusBadge } from "@/components/challenges/challenge-status-badge";
 import { MatchFormatBadge } from "@/components/challenges/match-format-badge";
+import { ShareLinkActions } from "@/components/common/share-link-actions";
 import { MatchResultForm } from "@/components/challenges/match-result-form";
 import { SectionHeading } from "@/components/common/section-heading";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,24 +19,17 @@ import {
   leaveChallengeAction,
 } from "@/lib/challenges/actions";
 import {
+  formatChallengeProposedAt,
+  getChallengeInvitePath,
+  getChallengePath,
+  getChallengeSeatsLabel,
+} from "@/lib/challenges/links";
+import {
   getChallengeByIdOrThrow,
   groupParticipantsByTeam,
   isChallengeJoinable,
   isChallengeLobbyEditable,
 } from "@/lib/challenges/queries";
-
-function formatProposedAt(date: Date | null) {
-  if (!date) {
-    return "Horario flexible";
-  }
-
-  return new Intl.DateTimeFormat("es-ES", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 export default async function MatchDetailPage({
   params,
@@ -71,6 +65,11 @@ export default async function MatchDetailPage({
     groupedParticipants.teamB.length === 2 &&
     groupedParticipants.unassigned.length === 0;
   const showLobby = participantCount === 4 && viewerIsParticipant;
+  const seatsLabel = getChallengeSeatsLabel(participantCount);
+  const hasInviteCode = Boolean(challenge.inviteCode);
+  const invitePath = challenge.inviteCode
+    ? getChallengeInvitePath(challenge.inviteCode)
+    : getChallengePath(challenge.id);
   const viewerTeamSlot =
     challenge.participants.find((participant) => participant.userId === appUser.id)?.teamSlot ??
     null;
@@ -144,12 +143,15 @@ export default async function MatchDetailPage({
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-primary">Fecha y hora</p>
               <p className="mt-1 font-medium text-foreground">
-                {formatProposedAt(challenge.proposedAt)}
+                {formatChallengeProposedAt(challenge.proposedAt)}
               </p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.18em] text-primary">Plazas</p>
-              <p className="mt-1 font-medium text-foreground">{participantCount}/4</p>
+              <p className="mt-1 font-medium text-foreground">
+                {participantCount}/4
+              </p>
+              <p>{seatsLabel}</p>
             </div>
 
             {canJoin ? (
@@ -225,6 +227,24 @@ export default async function MatchDetailPage({
         </div>
 
         <div className="grid gap-4">
+          <Card className="border-border/80 bg-card/95">
+            <CardHeader>
+              <CardTitle>Invitar amigos</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
+              <p>Comparte este enlace con tus amigos para completar la mesa mas rapido.</p>
+              <p className="font-medium text-foreground">{seatsLabel}</p>
+              <ShareLinkActions
+                primaryPath={invitePath}
+                primaryLabel={hasInviteCode ? "Copiar invitacion" : "Copiar enlace del reto"}
+                secondaryPath={hasInviteCode ? getChallengePath(challenge.id) : undefined}
+                secondaryLabel={hasInviteCode ? "Copiar enlace del reto" : undefined}
+                whatsappPath={invitePath}
+                whatsappText={`Te invito a una mesa de Mus League en ${challenge.league.name}.`}
+              />
+            </CardContent>
+          </Card>
+
           <Card className="border-border/80 bg-card/95">
             <CardHeader>
               <CardTitle>Como funciona esta mesa</CardTitle>

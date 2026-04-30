@@ -68,7 +68,12 @@ export function CreateChallengeForm({
           <label htmlFor="matchFormat" className="text-sm font-medium text-foreground">
             Tipo de partida
           </label>
-          <Select id="matchFormat" name="matchFormat" defaultValue={formatOptions[0]?.value} required>
+          <Select
+            id="matchFormat"
+            name="matchFormat"
+            defaultValue={formatOptions[0]?.value}
+            required
+          >
             {formatOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -86,7 +91,7 @@ export function CreateChallengeForm({
           <Input
             id="locationName"
             name="locationName"
-            placeholder="Móstoles, Bar La Plaza o Casa de Pedro"
+            placeholder="Mostoles, Bar La Plaza o Casa de Pedro"
             className="h-11 rounded-2xl px-3"
           />
           <p className="text-xs leading-5 text-muted-foreground">

@@ -183,16 +183,20 @@ export async function createChallengeAction(formData: FormData) {
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
+      const challengeData: Prisma.ChallengeUncheckedCreateInput = {
+        inviteCode: generateInviteCode(),
+        leagueId: parsed.data.leagueId,
+        creatorId: appUser.id,
+        matchFormat: parsed.data.matchFormat,
+        description: parsed.data.description ?? null,
+        locationName: parsed.data.locationName ?? null,
+        proposedAt: parsed.data.proposedAt ?? null,
+        status: ChallengeStatus.OPEN,
+      };
+
       challenge = await prisma.challenge.create({
         data: {
-          inviteCode: generateInviteCode(),
-          leagueId: parsed.data.leagueId,
-          creatorId: appUser.id,
-          matchFormat: parsed.data.matchFormat,
-          description: parsed.data.description ?? null,
-          locationName: parsed.data.locationName ?? null,
-          proposedAt: parsed.data.proposedAt ?? null,
-          status: ChallengeStatus.OPEN,
+          ...challengeData,
           participants: {
             create: {
               userId: appUser.id,

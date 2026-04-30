@@ -16,6 +16,7 @@ The current baseline covers the main Mus League product loop: authenticated acce
 ## Route strategy
 
 - `src/app/(marketing)` contains the public landing surface.
+- `src/app/(marketing)/invite` contains the public invite landing for retos.
 - `src/app/(account)` contains login, register and onboarding routes.
 - `src/app/(platform)` contains the protected shell and product routes.
 - `src/app/api/health/route.ts` exposes runtime readiness information.
@@ -32,6 +33,7 @@ The current baseline covers the main Mus League product loop: authenticated acce
 - `/leagues/[slug]` - zone detail and player scope.
 - `/matches` - retos board, create flow and recent confirmed matches.
 - `/matches/[id]` - reto detail, lobby, result capture, rival review and confirmed ELO summary.
+- `/invite` - public invite page resolved from `Challenge.inviteCode`.
 - `/rankings` - live global and territorial player ladders by ELO.
 - `/profile` - profile editing, player stats, ELO movement and match history.
 - `/admin` - environment and integration readiness.
@@ -85,7 +87,7 @@ docs/
 - `Team` and `TeamMember`
   Store persistent league rosters for future seasons.
 - `Challenge`
-  Stores the reto lifecycle: creator, broad zone, optional `locationName`, match format, optional schedule and state machine.
+  Stores the reto lifecycle: creator, broad zone, optional `locationName`, invite code, match format, optional schedule and state machine.
 - `ChallengeParticipant`
   Stores the temporary 4-seat lobby before lock, including manual team assignment.
 - `Match`
@@ -133,7 +135,7 @@ Current seed hierarchy:
 - `src/lib/auth/update-session.ts`
   Refreshes Supabase cookies and redirects unauthenticated protected requests before App Router rendering.
 - `src/lib/auth/session.ts`
-  Centralizes protected-route access and onboarding redirects.
+  Centralizes protected-route access, safe `redirectTo` handling and onboarding redirects.
 - `src/lib/auth/actions.ts`
   Contains sign-in, sign-up, sign-out and profile persistence actions.
 - `src/lib/profile/profile.ts`
@@ -141,9 +143,9 @@ Current seed hierarchy:
 - `src/lib/leagues/queries.ts`
   Resolves zone hierarchy, selection options and nearby discovery.
 - `src/lib/challenges/actions.ts`
-  Handles reto creation, joins, lobby assignment, match start, result submission and result confirmation/dispute.
+  Handles reto creation, invite-code generation, joins, lobby assignment, match start, result submission and result confirmation/dispute.
 - `src/lib/challenges/queries.ts`
-  Loads reto feeds, reto detail, nearby retos and match history surfaces.
+  Loads reto feeds, reto detail, invite lookups, nearby retos and match history surfaces.
 - `src/lib/elo/rating.ts`
   Holds the pure ELO math and K-factor map.
 - `src/lib/elo/apply.ts`
@@ -161,6 +163,23 @@ Current seed hierarchy:
 6. Onboarding stores city, bio, avatar, display name and `preferredLeagueId`.
 7. Once onboarding is complete, the player can access the protected shell.
 
+## Invite flow
+
+1. Every new reto gets a short `inviteCode`.
+2. `/matches/[id]` exposes sharing actions for:
+   - public invite link
+   - direct reto link
+   - WhatsApp sharing
+3. `/invite?code=XXXX` resolves the reto publicly and shows:
+   - broad zone
+   - optional concrete location
+   - proposed time
+   - current participants
+   - seats remaining
+4. If the visitor has no session, CTA links to `/register` or `/login` with a safe `redirectTo`.
+5. If the visitor authenticates but still needs onboarding, the same `redirectTo` survives through `/onboarding`.
+6. Once the profile is complete, the user lands on `/matches/[id]` and can join if seats are still available.
+
 ## Development seed dataset
 
 `prisma/seed.ts` seeds a realistic QA dataset on top of the territorial graph:
@@ -168,6 +187,7 @@ Current seed hierarchy:
 - 8 demo players distributed across the five broad Madrid zones.
 - Player bios, avatar URLs, preferred zones and clean profile metadata.
 - Multiple retos in `OPEN`, `FULL` and `TEAMS_EDITING`, with optional concrete locations such as bars, municipalities or houses.
+- Invite codes on seeded retos so the public invite flow can be tested immediately.
 - Confirmed matches with `Challenge`, `ChallengeParticipant`, `Match`, `MatchTeam`, `MatchPlayer` and `EloHistory`.
 - Updated ELO, wins, losses and matches played on seeded `PlayerProfile` rows.
 

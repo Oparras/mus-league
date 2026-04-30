@@ -4,12 +4,14 @@ import { ArrowUpRight, History, Swords, Trophy, Users } from "lucide-react";
 import { ChallengeCard } from "@/components/challenges/challenge-card";
 import { MatchHistoryCard } from "@/components/challenges/match-history-card";
 import { EmptyStateCard } from "@/components/common/empty-state-card";
+import { ShareLinkActions } from "@/components/common/share-link-actions";
 import { EloMovementList } from "@/components/elo/elo-movement-list";
 import { PlayerCard } from "@/components/leagues/player-card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCompletedProfile } from "@/lib/auth/session";
+import { getChallengeInvitePath } from "@/lib/challenges/links";
 import { getNearbyChallenges, getPlayerMatchHistory } from "@/lib/challenges/queries";
 import {
   calculateWinrate,
@@ -54,6 +56,7 @@ export default async function DashboardPage() {
   ]);
 
   const winrate = calculateWinrate(profile.wins, profile.matchesPlayed);
+  const featuredInviteChallenge = nearbyChallenges[0] ?? null;
   const metrics = [
     {
       label: "ELO actual",
@@ -181,6 +184,82 @@ export default async function DashboardPage() {
           title="Ultimas variaciones de ELO"
           emptyLabel="Todavia no tienes cambios de ELO. En cuanto cierres una partida confirmada, apareceran aqui."
         />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card className="border-border/80 bg-card/95">
+          <CardHeader>
+            <CardTitle>Invita a tus amigos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
+            <p>
+              Comparte Mus League con tu grupo o manda directamente una mesa abierta para
+              sentaros a jugar cuanto antes.
+            </p>
+            <ShareLinkActions
+              primaryPath="/"
+              primaryLabel="Copiar enlace general"
+              secondaryPath={
+                featuredInviteChallenge?.inviteCode
+                  ? getChallengeInvitePath(featuredInviteChallenge.inviteCode)
+                  : undefined
+              }
+              secondaryLabel={featuredInviteChallenge ? "Copiar reto cercano" : undefined}
+              whatsappPath={
+                featuredInviteChallenge?.inviteCode
+                  ? getChallengeInvitePath(featuredInviteChallenge.inviteCode)
+                  : "/"
+              }
+              whatsappText={
+                featuredInviteChallenge
+                  ? `Te paso una mesa de Mus League en ${featuredInviteChallenge.league.name}.`
+                  : "Te invito a Mus League para jugar y subir ELO."
+              }
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/80 bg-card/95">
+          <CardHeader>
+            <CardTitle>Invitacion destacada</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm leading-6 text-muted-foreground">
+            {featuredInviteChallenge ? (
+              <>
+                <p className="font-medium text-foreground">
+                  {featuredInviteChallenge.locationName ||
+                    `Mesa en ${featuredInviteChallenge.league.name}`}
+                </p>
+                <p>
+                  {featuredInviteChallenge.description ||
+                    "Reto abierto listo para sumar pareja y arrancar."}
+                </p>
+                <p>
+                  Zona:{" "}
+                  <span className="font-medium text-foreground">
+                    {featuredInviteChallenge.league.name}
+                  </span>
+                </p>
+                <Link
+                  href={`/matches/${featuredInviteChallenge.id}`}
+                  className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full")}
+                >
+                  Abrir reto
+                </Link>
+              </>
+            ) : (
+              <>
+                <p>No tienes ahora mismo un reto cercano para compartir.</p>
+                <Link
+                  href="/matches"
+                  className={cn(buttonVariants({ size: "lg" }), "rounded-full")}
+                >
+                  Crear reto
+                </Link>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </section>
 
       <section className="space-y-5">
