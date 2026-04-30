@@ -7,6 +7,8 @@ import {
   LOGIN_PATH,
   ONBOARDING_PATH,
   PROFILE_PATH,
+  sanitizeRedirectPath,
+  withRedirectTo,
 } from "@/lib/auth/session";
 import { loginSchema, registerSchema } from "@/lib/auth/schemas";
 import { createSupabaseServerClient } from "@/lib/db/supabase-server";
@@ -22,14 +24,18 @@ function redirectWithMessage(
   kind: "error" | "message",
   message: string,
 ): never {
-  const searchParams = new URLSearchParams({
-    [kind]: message,
-  });
+  const url = new URL(path, "http://localhost");
+  url.searchParams.set(kind, message);
 
-  redirect(`${path}?${searchParams.toString()}`);
+  redirect(`${url.pathname}?${url.searchParams.toString()}`);
 }
 
 export async function loginAction(formData: FormData) {
+  const redirectTo = sanitizeRedirectPath(
+    typeof formData.get("redirectTo") === "string"
+      ? formData.get("redirectTo") as string
+      : null,
+  );
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -37,7 +43,7 @@ export async function loginAction(formData: FormData) {
 
   if (!parsed.success) {
     redirectWithMessage(
-      LOGIN_PATH,
+      withRedirectTo(LOGIN_PATH, redirectTo),
       "error",
       parsed.error.issues[0]?.message ?? "No hemos podido iniciar sesion.",
     );
@@ -52,7 +58,7 @@ export async function loginAction(formData: FormData) {
 
   if (error || !authUser) {
     redirectWithMessage(
-      LOGIN_PATH,
+      withRedirectTo(LOGIN_PATH, redirectTo),
       "error",
       error?.message ?? "No hemos podido iniciar sesion con esas credenciales.",
     );
@@ -62,13 +68,18 @@ export async function loginAction(formData: FormData) {
   const profile = await getProfileByUserId(appUser.id);
 
   if (!profile) {
-    redirect(ONBOARDING_PATH);
+    redirect(withRedirectTo(ONBOARDING_PATH, redirectTo));
   }
 
-  redirect(DASHBOARD_PATH);
+  redirect(redirectTo ?? DASHBOARD_PATH);
 }
 
 export async function registerAction(formData: FormData) {
+  const redirectTo = sanitizeRedirectPath(
+    typeof formData.get("redirectTo") === "string"
+      ? formData.get("redirectTo") as string
+      : null,
+  );
   const parsed = registerSchema.safeParse({
     displayName: formData.get("displayName"),
     email: formData.get("email"),
@@ -78,7 +89,7 @@ export async function registerAction(formData: FormData) {
 
   if (!parsed.success) {
     redirectWithMessage(
-      "/register",
+      withRedirectTo("/register", redirectTo),
       "error",
       parsed.error.issues[0]?.message ?? "No hemos podido crear tu cuenta.",
     );
@@ -96,7 +107,7 @@ export async function registerAction(formData: FormData) {
   });
 
   if (error) {
-    redirectWithMessage("/register", "error", error.message);
+    redirectWithMessage(withRedirectTo("/register", redirectTo), "error", error.message);
   }
 
   const authUser = data.user;
@@ -109,13 +120,13 @@ export async function registerAction(formData: FormData) {
 
   if (!data.session) {
     redirectWithMessage(
-      LOGIN_PATH,
+      withRedirectTo(LOGIN_PATH, redirectTo),
       "message",
       "Cuenta creada. Si necesitas confirmar el correo, revisa tu bandeja y despues inicia sesion para entrar en la mesa.",
     );
   }
 
-  redirect(ONBOARDING_PATH);
+  redirect(withRedirectTo(ONBOARDING_PATH, redirectTo));
 }
 
 async function saveProfile(formData: FormData, nextPath: string) {
@@ -152,8 +163,17 @@ async function saveProfile(formData: FormData, nextPath: string) {
 }
 
 export async function completeProfileAction(formData: FormData) {
+  const redirectTo = sanitizeRedirectPath(
+    typeof formData.get("redirectTo") === "string"
+      ? formData.get("redirectTo") as string
+      : null,
+  );
   await saveProfile(formData, ONBOARDING_PATH);
-  redirectWithMessage(PROFILE_PATH, "message", "Perfil listo. Ya puedes empezar a jugar.");
+  redirectWithMessage(
+    redirectTo ?? PROFILE_PATH,
+    "message",
+    "Perfil listo. Ya puedes empezar a jugar.",
+  );
 }
 
 export async function updateProfileAction(formData: FormData) {

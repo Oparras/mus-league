@@ -28,12 +28,14 @@ type PlayerProfileFormProps = {
     preferredLeagueId?: string | null;
     email: string;
   };
+  redirectTo?: string | null;
 };
 
 export function PlayerProfileForm({
   mode,
   leagueOptions,
   initialValues,
+  redirectTo,
 }: PlayerProfileFormProps) {
   const action =
     mode === "onboarding" ? completeProfileAction : updateProfileAction;
@@ -42,6 +44,7 @@ export function PlayerProfileForm({
     <div className="space-y-6">
       <form action={action} className="space-y-5">
         <QueryMessage />
+        {redirectTo ? <input type="hidden" name="redirectTo" value={redirectTo} /> : null}
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-2">

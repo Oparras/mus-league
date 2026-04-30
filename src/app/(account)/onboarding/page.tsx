@@ -2,15 +2,27 @@ import { redirect } from "next/navigation";
 
 import { AccountPanel } from "@/components/auth/account-panel";
 import { PlayerProfileForm } from "@/components/auth/player-profile-form";
-import { PROFILE_PATH, requireAuthenticatedUser } from "@/lib/auth/session";
+import {
+  PROFILE_PATH,
+  requireAuthenticatedUser,
+  sanitizeRedirectPath,
+} from "@/lib/auth/session";
 import { getLeagueSelectionOptions } from "@/lib/leagues/queries";
 
-export default async function OnboardingPage() {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    redirectTo?: string;
+  }>;
+}) {
+  const resolvedSearchParams = await searchParams;
+  const redirectTo = sanitizeRedirectPath(resolvedSearchParams.redirectTo ?? null);
   const { authUser, appUser, profile } = await requireAuthenticatedUser();
   const leagueOptions = await getLeagueSelectionOptions();
 
   if (profile?.preferredLeagueId) {
-    redirect(PROFILE_PATH);
+    redirect(redirectTo ?? PROFILE_PATH);
   }
 
   return (
@@ -34,6 +46,7 @@ export default async function OnboardingPage() {
           preferredLeagueId: profile?.preferredLeagueId ?? "",
           email: authUser.email ?? appUser.email,
         }}
+        redirectTo={redirectTo}
       />
     </AccountPanel>
   );

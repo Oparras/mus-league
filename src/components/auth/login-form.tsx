@@ -7,10 +7,15 @@ import { QueryMessage } from "@/components/auth/query-message";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { Input } from "@/components/ui/input";
 
-export function LoginForm() {
+export function LoginForm({
+  redirectTo,
+}: {
+  redirectTo?: string | null;
+}) {
   return (
     <form action={loginAction} className="space-y-5">
       <QueryMessage />
+      {redirectTo ? <input type="hidden" name="redirectTo" value={redirectTo} /> : null}
 
       <div className="space-y-2">
         <label htmlFor="email" className="text-sm font-medium text-foreground">
@@ -48,7 +53,10 @@ export function LoginForm() {
 
       <p className="text-sm leading-6 text-muted-foreground">
         Si todavia no juegas en Mus League,{" "}
-        <Link href="/register" className="font-medium text-foreground underline-offset-4 hover:underline">
+        <Link
+          href={redirectTo ? `/register?redirectTo=${encodeURIComponent(redirectTo)}` : "/register"}
+          className="font-medium text-foreground underline-offset-4 hover:underline"
+        >
           crea tu cuenta
         </Link>
         .

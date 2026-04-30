@@ -258,6 +258,7 @@ model Match {
 
 model Challenge {
   id            String            @id @default(cuid())
+  inviteCode    String            @unique
   leagueId      String
   creatorId     String
   matchFormat   MatchFormat

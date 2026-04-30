@@ -7,10 +7,15 @@ import { SubmitButton } from "@/components/auth/submit-button";
 import { Input } from "@/components/ui/input";
 import { registerAction } from "@/lib/auth/actions";
 
-export function RegisterForm() {
+export function RegisterForm({
+  redirectTo,
+}: {
+  redirectTo?: string | null;
+}) {
   return (
     <form action={registerAction} className="space-y-5">
       <QueryMessage />
+      {redirectTo ? <input type="hidden" name="redirectTo" value={redirectTo} /> : null}
 
       <div className="space-y-2">
         <label
@@ -88,7 +93,10 @@ export function RegisterForm() {
 
       <p className="text-sm leading-6 text-muted-foreground">
         Si ya tienes mesa abierta,{" "}
-        <Link href="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
+        <Link
+          href={redirectTo ? `/login?redirectTo=${encodeURIComponent(redirectTo)}` : "/login"}
+          className="font-medium text-foreground underline-offset-4 hover:underline"
+        >
           inicia sesion
         </Link>
         .

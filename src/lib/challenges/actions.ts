@@ -12,6 +12,7 @@ import {
   editableChallengeStatuses,
   joinableChallengeStatuses,
 } from "@/lib/challenges/constants";
+import { getChallengePath } from "@/lib/challenges/links";
 import {
   createChallengeSchema,
   disputeMatchResultSchema,
@@ -45,8 +46,8 @@ function redirectWithMessage(
   redirect(`${path}?${searchParams.toString()}`);
 }
 
-function getChallengePath(challengeId: string) {
-  return `/matches/${challengeId}`;
+function generateInviteCode() {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
 }
 
 function isStatusInList(
@@ -178,26 +179,47 @@ export async function createChallengeAction(formData: FormData) {
     redirectWithMessage("/matches", "error", "La zona seleccionada ya no esta disponible.");
   }
 
-  const challenge = await prisma.challenge.create({
-    data: {
-      leagueId: parsed.data.leagueId,
-      creatorId: appUser.id,
-      matchFormat: parsed.data.matchFormat,
-      description: parsed.data.description ?? null,
-      locationName: parsed.data.locationName ?? null,
-      proposedAt: parsed.data.proposedAt ?? null,
-      status: ChallengeStatus.OPEN,
-      participants: {
-        create: {
-          userId: appUser.id,
-          seatIndex: 1,
+  let challenge: { id: string } | null = null;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      challenge = await prisma.challenge.create({
+        data: {
+          inviteCode: generateInviteCode(),
+          leagueId: parsed.data.leagueId,
+          creatorId: appUser.id,
+          matchFormat: parsed.data.matchFormat,
+          description: parsed.data.description ?? null,
+          locationName: parsed.data.locationName ?? null,
+          proposedAt: parsed.data.proposedAt ?? null,
+          status: ChallengeStatus.OPEN,
+          participants: {
+            create: {
+              userId: appUser.id,
+              seatIndex: 1,
+            },
+          },
         },
-      },
-    },
-    select: {
-      id: true,
-    },
-  });
+        select: {
+          id: true,
+        },
+      });
+      break;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  if (!challenge) {
+    redirectWithMessage("/matches", "error", "No hemos podido generar la invitacion del reto.");
+  }
 
   redirectWithMessage(
     getChallengePath(challenge.id),

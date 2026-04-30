@@ -15,6 +15,40 @@ export const ONBOARDING_PATH = "/onboarding";
 export const DASHBOARD_PATH = "/dashboard";
 export const PROFILE_PATH = "/profile";
 
+function appendSearchParam(path: string, key: string, value: string) {
+  const url = new URL(path, "http://localhost");
+  url.searchParams.set(key, value);
+  return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
+export function sanitizeRedirectPath(redirectTo?: string | null) {
+  if (!redirectTo) {
+    return null;
+  }
+
+  const trimmed = redirectTo.trim();
+
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return null;
+  }
+
+  if (trimmed.startsWith(LOGIN_PATH) || trimmed.startsWith(REGISTER_PATH)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+export function withRedirectTo(path: string, redirectTo?: string | null) {
+  const safeRedirectPath = sanitizeRedirectPath(redirectTo);
+
+  if (!safeRedirectPath) {
+    return path;
+  }
+
+  return appendSearchParam(path, "redirectTo", safeRedirectPath);
+}
+
 export async function getAuthenticatedAppContext(): Promise<AuthenticatedAppContext | null> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -35,21 +69,21 @@ export async function getAuthenticatedAppContext(): Promise<AuthenticatedAppCont
   };
 }
 
-export async function requireAuthenticatedUser() {
+export async function requireAuthenticatedUser(redirectTo?: string | null) {
   const context = await getAuthenticatedAppContext();
 
   if (!context) {
-    redirect(LOGIN_PATH);
+    redirect(withRedirectTo(LOGIN_PATH, redirectTo));
   }
 
   return context;
 }
 
-export async function requireCompletedProfile() {
-  const context = await requireAuthenticatedUser();
+export async function requireCompletedProfile(redirectTo?: string | null) {
+  const context = await requireAuthenticatedUser(redirectTo);
 
   if (!context.profile || !context.profile.preferredLeagueId) {
-    redirect(ONBOARDING_PATH);
+    redirect(withRedirectTo(ONBOARDING_PATH, redirectTo));
   }
 
   return context as AuthenticatedAppContext & {
@@ -57,16 +91,17 @@ export async function requireCompletedProfile() {
   };
 }
 
-export async function redirectAuthenticatedUsers() {
+export async function redirectAuthenticatedUsers(redirectTo?: string | null) {
   const context = await getAuthenticatedAppContext();
+  const safeRedirectPath = sanitizeRedirectPath(redirectTo);
 
   if (!context) {
     return;
   }
 
   if (!context.profile || !context.profile.preferredLeagueId) {
-    redirect(ONBOARDING_PATH);
+    redirect(withRedirectTo(ONBOARDING_PATH, safeRedirectPath));
   }
 
-  redirect(DASHBOARD_PATH);
+  redirect(safeRedirectPath ?? DASHBOARD_PATH);
 }
