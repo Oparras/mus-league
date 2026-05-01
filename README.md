@@ -63,6 +63,7 @@ npm run dev
 - `npm run prisma:studio`
 - `npm run prisma:seed`
 - `npm run prisma:seed:prod`
+- `npm run prisma:cleanup-demo`
 
 ## Variables de entorno
 
@@ -281,6 +282,59 @@ Importante:
 
 - El seed en modo produccion no borra usuarios reales automaticamente.
 - No automatizamos limpieza destructiva de Supabase Auth para evitar tocar cuentas reales por error.
+
+## Limpieza segura de datos demo
+
+Para revisar que borraria el cleanup sin tocar nada:
+
+```bash
+npm run prisma:cleanup-demo
+```
+
+Ese modo es `dry-run` por defecto y solo muestra:
+
+- perfiles demo detectados
+- usuarios demo detectados
+- cuentas demo detectadas en Supabase Auth si hay `SUPABASE_SERVICE_ROLE_KEY`
+- cuantos registros borraria por tabla
+
+El script es conservador y solo marca como demo identidades claramente reconocibles, por ejemplo:
+
+- emails con dominio `@getmusleague.test`
+- emails con dominio `@musleague.local`
+- emails tipo `demo@`, `demo1@`, `demo2@`
+- ids tipo `seed-user-*`
+- nombres claramente demo
+
+Para ejecutar el borrado real:
+
+```bash
+MUSLEAGUE_CONFIRM_CLEANUP=true npm run prisma:cleanup-demo
+```
+
+El cleanup:
+
+- no toca las zonas base
+- no borra `User` ni `PlayerProfile` que no sean demo
+- no borra nada si falta `MUSLEAGUE_CONFIRM_CLEANUP=true`
+- intenta limpiar tambien cuentas demo de Supabase Auth si el proyecto tiene `SUPABASE_SERVICE_ROLE_KEY`
+
+Orden de borrado:
+
+- `Notification`
+- `Message`
+- `ConversationParticipant`
+- `Conversation`
+- `ChallengeInvite`
+- `ChallengeParticipant`
+- `MatchPlayer`
+- `MatchTeam`
+- `EloHistory`
+- `Match`
+- `Challenge`
+- `Friendship`
+- `PlayerProfile`
+- `User`
 
 ## Notas
 

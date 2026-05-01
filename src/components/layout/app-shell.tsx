@@ -8,6 +8,7 @@ import {
   BellRing,
   Layers3,
   LayoutDashboard,
+  LogOut,
   Menu,
   MessageSquareMore,
   Shield,
@@ -25,10 +26,12 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { signOutAction } from "@/lib/auth/actions";
 import { platformNav, siteConfig } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
@@ -51,12 +54,14 @@ function isActive(pathname: string, href: string) {
 function NavigationList({
   pathname,
   onNavigate,
+  compact = false,
 }: {
   pathname: string;
   onNavigate?: () => void;
+  compact?: boolean;
 }) {
   return (
-    <nav className="space-y-2">
+    <nav className={compact ? "space-y-1.5" : "space-y-2"}>
       {platformNav.map((item) => {
         const Icon = navIcons[item.href as keyof typeof navIcons];
         const active = isActive(pathname, item.href);
@@ -67,7 +72,8 @@ function NavigationList({
             href={item.href}
             onClick={onNavigate}
             className={cn(
-              "flex rounded-2xl border border-transparent px-4 py-3 transition-colors",
+              "flex rounded-2xl border border-transparent transition-colors",
+              compact ? "px-3 py-2.5" : "px-4 py-3",
               active
                 ? "border-primary/20 bg-primary/8 text-foreground"
                 : "text-muted-foreground hover:border-border/80 hover:bg-secondary/70 hover:text-foreground",
@@ -76,7 +82,9 @@ function NavigationList({
             <div className="flex gap-3">
               <span
                 className={cn(
-                  "mt-0.5 flex size-9 items-center justify-center rounded-xl border",
+                  compact
+                    ? "mt-0.5 flex size-8 items-center justify-center rounded-xl border"
+                    : "mt-0.5 flex size-9 items-center justify-center rounded-xl border",
                   active
                     ? "border-primary/20 bg-primary text-primary-foreground"
                     : "border-border bg-background text-muted-foreground",
@@ -84,9 +92,14 @@ function NavigationList({
               >
                 <Icon className="size-4" />
               </span>
-              <div className="space-y-1">
+              <div className={compact ? "space-y-0.5" : "space-y-1"}>
                 <p className="font-medium">{item.label}</p>
-                <p className="text-xs leading-5 text-muted-foreground">
+                <p
+                  className={cn(
+                    "text-xs text-muted-foreground",
+                    compact ? "leading-4" : "leading-5",
+                  )}
+                >
                   {item.description}
                 </p>
               </div>
@@ -170,19 +183,59 @@ export function AppShell({
                   <Menu />
                   <span className="sr-only">Abrir navegacion</span>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[320px]">
-                  <SheetHeader>
+                <SheetContent
+                  side="left"
+                  className="flex h-dvh max-h-screen w-[320px] max-w-[88vw] flex-col overflow-hidden p-0"
+                >
+                  <SheetHeader className="shrink-0 border-b border-border/60 pr-14">
                     <SheetTitle>{siteConfig.name}</SheetTitle>
                     <SheetDescription>
                       Accede rapido a tu zona, tus retos y tu posicion en el ranking.
                     </SheetDescription>
                   </SheetHeader>
-                  <div className="px-4 pb-6">
+                  <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
                     <NavigationList
                       pathname={pathname}
                       onNavigate={() => setIsMobileNavOpen(false)}
+                      compact
                     />
                   </div>
+                  <SheetFooter className="shrink-0 border-t border-border/60 bg-background/95">
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsMobileNavOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card/80 px-3 py-3"
+                    >
+                      <Avatar size="sm">
+                        {currentUser.avatarUrl ? (
+                          <AvatarImage
+                            src={currentUser.avatarUrl}
+                            alt={currentUser.displayName}
+                          />
+                        ) : null}
+                        <AvatarFallback>ML</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {currentUser.displayName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {currentUser.preferredZone}
+                        </p>
+                      </div>
+                    </Link>
+                    <form action={signOutAction} className="w-full">
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        size="lg"
+                        className="w-full rounded-2xl"
+                      >
+                        <LogOut className="size-4" />
+                        Cerrar sesion
+                      </Button>
+                    </form>
+                  </SheetFooter>
                 </SheetContent>
               </Sheet>
 
