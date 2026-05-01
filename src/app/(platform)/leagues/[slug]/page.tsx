@@ -110,6 +110,7 @@ export default async function LeagueDetailPage({
                   zoneName={player.preferredLeague?.name}
                   zoneSlug={player.preferredLeague?.slug}
                   bio={player.bio}
+                  profileHref={`/players/${player.userId}`}
                 />
               ))}
             </div>

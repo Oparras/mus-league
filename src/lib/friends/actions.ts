@@ -25,7 +25,8 @@ function redirectWithMessage(
 }
 
 function resolveReturnTo(formData: FormData, fallbackPath: string) {
-  const rawValue = typeof formData.get("returnTo") === "string" ? formData.get("returnTo") : null;
+  const returnToValue = formData.get("returnTo");
+  const rawValue = typeof returnToValue === "string" ? returnToValue : null;
 
   return sanitizeRedirectPath(rawValue) ?? fallbackPath;
 }

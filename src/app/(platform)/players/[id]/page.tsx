@@ -76,7 +76,7 @@ export default async function PlayerDetailPage({
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-[2rem] border border-border/70 bg-card/95 p-8 shadow-sm">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-            <Avatar size="xl">
+            <Avatar size="lg" className="size-16 sm:size-20">
               {player.avatarUrl ? <AvatarImage src={player.avatarUrl} alt={player.displayName} /> : null}
               <AvatarFallback>{player.displayName.slice(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>

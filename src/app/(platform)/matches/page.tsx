@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { requireCompletedProfile } from "@/lib/auth/session";
 import { getChallengeFeed, getRecentConfirmedMatches } from "@/lib/challenges/queries";
+import { getAcceptedFriends } from "@/lib/friends/queries";
 import { getLeagueSelectionOptions } from "@/lib/leagues/queries";
 import { cn } from "@/lib/utils";
 
@@ -25,12 +26,13 @@ export default async function MatchesPage({
   const resolvedSearchParams = await searchParams;
   const leagueOptions = await getLeagueSelectionOptions();
   const selectedLeagueId = resolvedSearchParams.zone || "";
-  const [challenges, recentConfirmedMatches] = await Promise.all([
+  const [challenges, recentConfirmedMatches, acceptedFriends] = await Promise.all([
     getChallengeFeed(selectedLeagueId || undefined),
     getRecentConfirmedMatches({
       leagueId: selectedLeagueId || undefined,
       limit: 4,
     }),
+    getAcceptedFriends(appUser.id),
   ]);
 
   const openCount = challenges.filter((challenge) => challenge.status === "OPEN").length;
@@ -118,6 +120,12 @@ export default async function MatchesPage({
             <CreateChallengeForm
               defaultLeagueId={selectedLeagueId || profile.preferredLeagueId}
               leagueOptions={leagueOptions}
+              friendOptions={acceptedFriends.map((friend) => ({
+                userId: friend.userId,
+                displayName: friend.displayName,
+                preferredLeagueName: friend.preferredLeagueName,
+                city: friend.city,
+              }))}
             />
           </CardContent>
         </Card>

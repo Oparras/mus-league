@@ -12,6 +12,7 @@ import {
   Swords,
   Trophy,
   UserRound,
+  Users,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,6 +36,7 @@ const navIcons = {
   "/matches": Swords,
   "/rankings": Trophy,
   "/profile": UserRound,
+  "/friends": Users,
   "/admin": Shield,
 } as const;
 

@@ -20,6 +20,12 @@ type CreateChallengeFormProps = {
     pathLabel: string;
     depth: number;
   }[];
+  friendOptions: {
+    userId: string;
+    displayName: string;
+    preferredLeagueName: string | null;
+    city: string | null;
+  }[];
 };
 
 const formatOptions = getMatchFormatOptions();
@@ -27,6 +33,7 @@ const formatOptions = getMatchFormatOptions();
 export function CreateChallengeForm({
   defaultLeagueId,
   leagueOptions,
+  friendOptions,
 }: CreateChallengeFormProps) {
   if (leagueOptions.length === 0) {
     return (
@@ -125,6 +132,46 @@ export function CreateChallengeForm({
             Opcional. Si la dejas vacia, el reto saldra como horario flexible.
           </p>
         </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-foreground">Invitar amigos</label>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Opcional. Marca a quien quieres avisar nada mas abrir la mesa.
+          </p>
+        </div>
+
+        {friendOptions.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {friendOptions.map((friend) => (
+              <label
+                key={friend.userId}
+                className="flex items-start gap-3 rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-foreground transition-colors hover:border-primary/30"
+              >
+                <input
+                  type="checkbox"
+                  name="invitedFriendIds"
+                  value={friend.userId}
+                  className="mt-1 size-4 rounded border-border bg-background text-primary focus:ring-primary/30"
+                />
+                <span className="space-y-1">
+                  <span className="block font-medium">{friend.displayName}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {[friend.preferredLeagueName, friend.city].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <EmptyStateCard
+            eyebrow="Sin amigos"
+            title="Todavia no tienes amigos para invitar"
+            description="En cuanto montes tu circulo de juego, podras dejar avisadas a tus parejas favoritas al crear un reto."
+            compact
+          />
+        )}
       </div>
 
       <SubmitButton pendingLabel="Creando reto..." className="h-11 rounded-2xl px-5">

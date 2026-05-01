@@ -29,11 +29,13 @@ The current baseline covers the main Mus League product loop: authenticated acce
 - `/register` - Supabase sign-up.
 - `/onboarding` - first-time player profile completion.
 - `/dashboard` - current zone, nearby retos, nearby players, current ELO and recent personal movement.
+- `/friends` - friend graph, pending requests and player search.
 - `/leagues` - active zone directory.
 - `/leagues/[slug]` - zone detail and player scope.
 - `/matches` - retos board, create flow and recent confirmed matches.
 - `/matches/[id]` - reto detail, lobby, result capture, rival review and confirmed ELO summary.
 - `/invite` - public invite page resolved from `Challenge.inviteCode`.
+- `/players/[id]` - public player profile with friendship and direct reto-invite actions.
 - `/rankings` - live global and territorial player ladders by ELO.
 - `/profile` - profile editing, player stats, ELO movement and match history.
 - `/admin` - environment and integration readiness.
@@ -53,6 +55,7 @@ src/
     challenges/
     common/
     elo/
+    friends/
     layout/
     leagues/
     ui/
@@ -64,6 +67,7 @@ src/
     config/
     db/
     elo/
+    friends/
     leagues/
     profile/
 prisma/
@@ -90,6 +94,10 @@ docs/
   Stores the reto lifecycle: creator, broad zone, optional `locationName`, invite code, match format, optional schedule and state machine.
 - `ChallengeParticipant`
   Stores the temporary 4-seat lobby before lock, including manual team assignment.
+- `Friendship`
+  Stores one record per player pair, including requester, addressee and `PENDING` / `ACCEPTED` / `REJECTED` / `BLOCKED`.
+- `ChallengeInvite`
+  Stores direct in-app invites from one player to another for a specific reto.
 - `Match`
   Stores the table created from a reto, result metadata, submitter, confirmer, dispute reason and `eloAppliedAt`.
 - `MatchTeam`
@@ -143,15 +151,19 @@ Current seed hierarchy:
 - `src/lib/leagues/queries.ts`
   Resolves zone hierarchy, selection options and nearby discovery.
 - `src/lib/challenges/actions.ts`
-  Handles reto creation, invite-code generation, joins, lobby assignment, match start, result submission and result confirmation/dispute.
+  Handles reto creation, invite-code generation, direct reto invites, joins, lobby assignment, match start, result submission and result confirmation/dispute.
 - `src/lib/challenges/queries.ts`
-  Loads reto feeds, reto detail, invite lookups, nearby retos and match history surfaces.
+  Loads reto feeds, reto detail, direct reto invites, invite lookups, nearby retos and match history surfaces.
 - `src/lib/elo/rating.ts`
   Holds the pure ELO math and K-factor map.
 - `src/lib/elo/apply.ts`
   Applies confirmed-match ELO updates inside a Prisma transaction.
 - `src/lib/elo/queries.ts`
   Provides movement feeds, approximate rank queries and ranking lists.
+- `src/lib/friends/actions.ts`
+  Handles friendship requests, acceptance, rejection and removal.
+- `src/lib/friends/queries.ts`
+  Resolves friend lists, pending requests, player search and relationship state.
 
 ## Auth and profile flow
 
@@ -179,6 +191,30 @@ Current seed hierarchy:
 4. If the visitor has no session, CTA links to `/register` or `/login` with a safe `redirectTo`.
 5. If the visitor authenticates but still needs onboarding, the same `redirectTo` survives through `/onboarding`.
 6. Once the profile is complete, the user lands on `/matches/[id]` and can join if seats are still available.
+
+## Friendship flow
+
+1. A player discovers another profile through `/friends`, `/dashboard`, `/leagues/[slug]` or `/players/[id]`.
+2. Sending a request creates or refreshes a `Friendship` pair in `PENDING`.
+3. The addressee can accept or reject from `/friends` or from the public player profile.
+4. If accepted, the pair moves to `ACCEPTED` and becomes available for in-app reto invitations.
+5. Removing a friend deletes the accepted edge but leaves match history untouched.
+
+## Direct reto invite flow
+
+1. A player creates a reto in `/matches`.
+2. During creation, the player can preselect accepted friends.
+3. Each selected friend receives a `ChallengeInvite` in `PENDING`.
+4. The same friend can also be invited later from `/players/[id]`, but only into retos where the inviter is already seated.
+5. `/dashboard` surfaces pending reto invitations with accept and reject actions.
+6. Accepting a `ChallengeInvite`:
+   - verifies the reto is still joinable
+   - verifies the player is not already seated
+   - verifies the table still has fewer than 4 participants
+   - auto-creates the matching `ChallengeParticipant`
+   - marks the `ChallengeInvite` as `ACCEPTED`
+7. If the reto is already full, the action stops with a user-facing message and the player is not duplicated into the table.
+8. Public invite links via `/invite?code=XXXX` continue to coexist with direct in-app invites.
 
 ## Development seed dataset
 

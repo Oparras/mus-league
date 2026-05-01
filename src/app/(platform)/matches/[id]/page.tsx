@@ -203,9 +203,16 @@ export default async function MatchDetailPage({
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">
+                      <Link
+                        href={
+                          participant.userId === appUser.id
+                            ? "/profile"
+                            : `/players/${participant.userId}`
+                        }
+                        className="truncate font-medium text-foreground transition-colors hover:text-primary"
+                      >
                         {participant.user.displayName}
-                      </p>
+                      </Link>
                       <p className="text-sm text-muted-foreground">
                         {participant.user.profile?.city ?? "Ubicacion habitual pendiente"}
                       </p>

@@ -61,7 +61,8 @@ function redirectWithMessage(
 }
 
 function resolveReturnTo(formData: FormData, fallbackPath: string) {
-  const rawValue = typeof formData.get("returnTo") === "string" ? formData.get("returnTo") : null;
+  const returnToValue = formData.get("returnTo");
+  const rawValue = typeof returnToValue === "string" ? returnToValue : null;
 
   return sanitizeRedirectPath(rawValue) ?? fallbackPath;
 }
@@ -344,31 +345,33 @@ export async function createChallengeAction(formData: FormData) {
         status: ChallengeStatus.OPEN,
       };
 
-      challenge = await prisma.challenge.create({
-        data: {
-          ...challengeData,
-          participants: {
-            create: {
-              userId: appUser.id,
-              seatIndex: 1,
+      challenge = await prisma.$transaction(async (tx) => {
+        const createdChallenge = await tx.challenge.create({
+          data: {
+            ...challengeData,
+            participants: {
+              create: {
+                userId: appUser.id,
+                seatIndex: 1,
+              },
             },
           },
-        },
-        select: {
-          id: true,
-        },
-      });
+          select: {
+            id: true,
+          },
+        });
 
-      if (invitedFriendIds.length > 0) {
-        await prisma.$transaction(async (tx) => {
+        if (invitedFriendIds.length > 0) {
           await upsertChallengeInvitesForFriends({
             tx,
-            challengeId: challenge!.id,
+            challengeId: createdChallenge.id,
             invitedByUserId: appUser.id,
             candidateUserIds: invitedFriendIds,
           });
-        });
-      }
+        }
+
+        return createdChallenge;
+      });
       break;
     } catch (error) {
       if (

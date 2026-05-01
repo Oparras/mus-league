@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { ArrowUpRight, History, Swords, Trophy, Users } from "lucide-react";
+import { ArrowUpRight, History, Mailbox, Swords, Trophy, Users } from "lucide-react";
 
+import { QueryMessage } from "@/components/auth/query-message";
+import { SubmitButton } from "@/components/auth/submit-button";
 import { ChallengeCard } from "@/components/challenges/challenge-card";
 import { MatchHistoryCard } from "@/components/challenges/match-history-card";
 import { EmptyStateCard } from "@/components/common/empty-state-card";
@@ -11,8 +13,16 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCompletedProfile } from "@/lib/auth/session";
+import {
+  acceptChallengeInviteAction,
+  declineChallengeInviteAction,
+} from "@/lib/challenges/actions";
 import { getChallengeInvitePath } from "@/lib/challenges/links";
-import { getNearbyChallenges, getPlayerMatchHistory } from "@/lib/challenges/queries";
+import {
+  getNearbyChallenges,
+  getPendingChallengeInvitesForUser,
+  getPlayerMatchHistory,
+} from "@/lib/challenges/queries";
 import {
   calculateWinrate,
   getApproximateGlobalRank,
@@ -37,11 +47,23 @@ const quickLinks = [
     title: "Ajustar perfil",
     description: "Cambia tu zona principal, tu ubicacion habitual o tu bio.",
   },
+  {
+    href: "/friends",
+    title: "Abrir amigos",
+    description: "Gestiona tu circulo de juego y manda invitaciones directas a tus retos.",
+  },
 ];
 
 export default async function DashboardPage() {
   const { appUser, profile } = await requireCompletedProfile();
-  const [nearbyPlayers, nearbyChallenges, latestMatches, globalRank, eloMovements] = await Promise.all([
+  const [
+    nearbyPlayers,
+    nearbyChallenges,
+    latestMatches,
+    globalRank,
+    eloMovements,
+    pendingInvites,
+  ] = await Promise.all([
     getNearbyPlayers(appUser.id, profile.preferredLeagueId),
     getNearbyChallenges(profile.preferredLeagueId),
     getPlayerMatchHistory({
@@ -53,6 +75,7 @@ export default async function DashboardPage() {
       userId: appUser.id,
       limit: 4,
     }),
+    getPendingChallengeInvitesForUser(appUser.id),
   ]);
 
   const winrate = calculateWinrate(profile.wins, profile.matchesPlayed);
@@ -82,6 +105,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <QueryMessage />
+
       <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-[2rem] border border-border/70 bg-card/95 p-8 shadow-sm">
           <div className="space-y-5">
@@ -189,6 +214,69 @@ export default async function DashboardPage() {
       <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
+            <CardTitle>Invitaciones pendientes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {pendingInvites.length > 0 ? (
+              pendingInvites.slice(0, 3).map((invite) => (
+                <div
+                  key={invite.id}
+                  className="rounded-2xl border border-border/70 bg-background/60 px-4 py-4"
+                >
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">
+                      {invite.challenge.locationName || `Mesa en ${invite.challenge.league.name}`}
+                    </p>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {invite.invitedByPlayer.displayName} te ha invitado a una mesa en{" "}
+                      {invite.challenge.league.name}.
+                    </p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-primary">
+                      {invite.challenge.participants.length}/4 plazas
+                    </p>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <form action={acceptChallengeInviteAction}>
+                      <input type="hidden" name="inviteId" value={invite.id} />
+                      <input type="hidden" name="returnTo" value="/dashboard" />
+                      <SubmitButton pendingLabel="Uniendote..." className="rounded-full">
+                        Aceptar
+                      </SubmitButton>
+                    </form>
+                    <form action={declineChallengeInviteAction}>
+                      <input type="hidden" name="inviteId" value={invite.id} />
+                      <input type="hidden" name="returnTo" value="/dashboard" />
+                      <SubmitButton
+                        pendingLabel="Respondiendo..."
+                        variant="outline"
+                        className="rounded-full"
+                      >
+                        Rechazar
+                      </SubmitButton>
+                    </form>
+                    <Link
+                      href={`/matches/${invite.challengeId}`}
+                      className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full")}
+                    >
+                      Ver reto
+                    </Link>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <EmptyStateCard
+                icon={<Mailbox className="size-5" />}
+                eyebrow="Todo al dia"
+                title="No tienes invitaciones pendientes"
+                description="Cuando un amigo te reserve una plaza en una mesa, la veras aqui lista para aceptar o rechazar."
+                compact
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/80 bg-card/95">
+          <CardHeader>
             <CardTitle>Invita a tus amigos</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
@@ -218,7 +306,9 @@ export default async function DashboardPage() {
             />
           </CardContent>
         </Card>
+      </section>
 
+      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="border-border/80 bg-card/95">
           <CardHeader>
             <CardTitle>Invitacion destacada</CardTitle>
@@ -258,6 +348,24 @@ export default async function DashboardPage() {
                 </Link>
               </>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/80 bg-card/95">
+          <CardHeader>
+            <CardTitle>Tu mejor atajo</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm leading-6 text-muted-foreground">
+            <p>
+              Si quieres cerrar mesas con gente conocida, tu lista de amigos es el camino mas
+              rapido.
+            </p>
+            <Link
+              href="/friends"
+              className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full")}
+            >
+              Abrir amigos
+            </Link>
           </CardContent>
         </Card>
       </section>
@@ -378,6 +486,7 @@ export default async function DashboardPage() {
                 zoneSlug={player.preferredLeagueSlug}
                 bio={player.bio}
                 label={player.relationLabel}
+                profileHref={`/players/${player.id}`}
               />
             ))}
           </div>

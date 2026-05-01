@@ -63,6 +63,11 @@ export const platformNav: NavItem[] = [
     description: "Tu identidad, tu zona y tus estadisticas de juego.",
   },
   {
+    href: "/friends",
+    label: "Amigos",
+    description: "Tu circulo de juego, solicitudes y acceso rapido a invitaciones directas.",
+  },
+  {
     href: "/admin",
     label: "Admin",
     description: "Estado tecnico, integraciones y preparacion del entorno.",
