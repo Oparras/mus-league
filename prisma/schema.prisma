@@ -66,6 +66,19 @@ enum ChallengeStatus {
   CANCELLED
 }
 
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
+enum ChallengeInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 enum MatchFormat {
   POINTS_30
   POINTS_40
@@ -100,6 +113,13 @@ model User {
   submittedMatches Match[]      @relation("MatchSubmittedBy")
   createdChallenges Challenge[] @relation("ChallengeCreator")
   challengeParticipations ChallengeParticipant[]
+  sentFriendships Friendship[] @relation("FriendshipRequester")
+  receivedFriendships Friendship[] @relation("FriendshipAddressee")
+  friendshipPairsLow Friendship[] @relation("FriendshipUserLow")
+  friendshipPairsHigh Friendship[] @relation("FriendshipUserHigh")
+  blockedFriendships Friendship[] @relation("FriendshipBlockedBy")
+  sentChallengeInvites ChallengeInvite[] @relation("ChallengeInviteSender")
+  receivedChallengeInvites ChallengeInvite[] @relation("ChallengeInviteRecipient")
   matchPlayers MatchPlayer[]
 }
 
@@ -273,6 +293,7 @@ model Challenge {
   league        League            @relation(fields: [leagueId], references: [id], onDelete: Cascade)
   creator       User              @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   participants  ChallengeParticipant[]
+  directInvites ChallengeInvite[]
   match         Match?
 
   @@index([leagueId, status, createdAt])
@@ -294,6 +315,48 @@ model ChallengeParticipant {
   @@unique([challengeId, userId])
   @@unique([challengeId, seatIndex])
   @@index([challengeId, teamSlot])
+}
+
+model Friendship {
+  id          String           @id @default(cuid())
+  userLowId   String
+  userHighId  String
+  requesterId String
+  addresseeId String
+  blockerId   String?
+  status      FriendshipStatus @default(PENDING)
+  respondedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  userLow     User             @relation("FriendshipUserLow", fields: [userLowId], references: [id], onDelete: Cascade)
+  userHigh    User             @relation("FriendshipUserHigh", fields: [userHighId], references: [id], onDelete: Cascade)
+  requester   User             @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee   User             @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  blocker     User?            @relation("FriendshipBlockedBy", fields: [blockerId], references: [id], onDelete: SetNull)
+
+  @@unique([userLowId, userHighId])
+  @@index([requesterId, status])
+  @@index([addresseeId, status])
+  @@index([status, updatedAt])
+}
+
+model ChallengeInvite {
+  id              String                @id @default(cuid())
+  challengeId     String
+  invitedPlayerId String
+  invitedByPlayerId String
+  status          ChallengeInviteStatus @default(PENDING)
+  createdAt       DateTime              @default(now())
+  respondedAt     DateTime?
+  updatedAt       DateTime              @updatedAt
+  challenge       Challenge             @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  invitedPlayer   User                  @relation("ChallengeInviteRecipient", fields: [invitedPlayerId], references: [id], onDelete: Cascade)
+  invitedByPlayer User                  @relation("ChallengeInviteSender", fields: [invitedByPlayerId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, invitedPlayerId])
+  @@index([invitedPlayerId, status, createdAt])
+  @@index([invitedByPlayerId, status, createdAt])
+  @@index([challengeId, status, createdAt])
 }
 
 model MatchTeam {

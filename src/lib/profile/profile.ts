@@ -117,6 +117,21 @@ export async function getAppUserWithProfile(userId: string) {
   });
 }
 
+export async function getPublicPlayerProfileByUserId(userId: string) {
+  const prisma = getPrismaClient();
+
+  return prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      profile: {
+        include: {
+          preferredLeague: true,
+        },
+      },
+    },
+  });
+}
+
 export async function savePlayerProfileForUser(
   userId: string,
   input: PlayerProfileInput,

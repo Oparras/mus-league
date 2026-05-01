@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import Link from "next/link";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,6 +14,8 @@ type PlayerCardProps = {
   zoneSlug?: string | null;
   bio?: string | null;
   label?: string;
+  profileHref?: string;
+  action?: ReactNode;
 };
 
 export function PlayerCard({
@@ -22,7 +26,17 @@ export function PlayerCard({
   zoneSlug,
   bio,
   label,
+  profileHref,
+  action,
 }: PlayerCardProps) {
+  const displayNameNode = profileHref ? (
+    <Link href={profileHref} className="transition-colors hover:text-primary">
+      {displayName}
+    </Link>
+  ) : (
+    displayName
+  );
+
   return (
     <Card className="border-border/70 bg-card/95">
       <CardContent className="flex items-start gap-4 pt-4">
@@ -32,9 +46,11 @@ export function PlayerCard({
         </Avatar>
 
         <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-medium text-foreground">{displayName}</p>
-            {label ? <Badge variant="outline">{label}</Badge> : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium text-foreground">{displayNameNode}</p>
+              {label ? <Badge variant="outline">{label}</Badge> : null}
+            </div>
           </div>
           <div className="space-y-1 text-sm leading-6 text-muted-foreground">
             <p>{city}</p>
@@ -52,6 +68,7 @@ export function PlayerCard({
             ) : null}
             <p>{bio || "Todavia no ha escrito nada sobre su estilo de juego."}</p>
           </div>
+          {action ? <div className="flex flex-wrap gap-2 pt-1">{action}</div> : null}
         </div>
       </CardContent>
     </Card>

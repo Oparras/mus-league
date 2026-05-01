@@ -3,11 +3,14 @@
 import { redirect } from "next/navigation";
 
 import {
+  ChallengeInviteStatus,
   ChallengeStatus,
+  FriendshipStatus,
   LobbyTeamSlot,
   MatchStatus,
   Prisma,
 } from "@/generated/prisma/client";
+import { sanitizeRedirectPath } from "@/lib/auth/session";
 import {
   editableChallengeStatuses,
   joinableChallengeStatuses,
@@ -34,6 +37,17 @@ const challengeIdSchema = z.object({
   challengeId: z.string().trim().min(1, "Falta el identificador del reto."),
 });
 
+const challengeInviteSchema = z.object({
+  challengeId: z.string().trim().min(1, "Falta el identificador del reto."),
+  invitedPlayerId: z.string().trim().min(1, "Falta el jugador invitado."),
+  returnTo: z.string().trim().optional(),
+});
+
+const challengeInviteResponseSchema = z.object({
+  inviteId: z.string().trim().min(1, "Falta la invitacion."),
+  returnTo: z.string().trim().optional(),
+});
+
 function redirectWithMessage(
   path: string,
   kind: "error" | "message",
@@ -44,6 +58,12 @@ function redirectWithMessage(
   });
 
   redirect(`${path}?${searchParams.toString()}`);
+}
+
+function resolveReturnTo(formData: FormData, fallbackPath: string) {
+  const rawValue = typeof formData.get("returnTo") === "string" ? formData.get("returnTo") : null;
+
+  return sanitizeRedirectPath(rawValue) ?? fallbackPath;
 }
 
 function generateInviteCode() {
@@ -65,6 +85,131 @@ function getNextSeatIndex(participants: { seatIndex: number }[]) {
   }
 
   return null;
+}
+
+async function getAcceptedFriendIds(
+  tx: Prisma.TransactionClient,
+  viewerUserId: string,
+  candidateUserIds: string[],
+) {
+  if (candidateUserIds.length === 0) {
+    return [];
+  }
+
+  const friendships = await tx.friendship.findMany({
+    where: {
+      status: FriendshipStatus.ACCEPTED,
+      OR: [
+        {
+          userLowId: viewerUserId,
+          userHighId: {
+            in: candidateUserIds,
+          },
+        },
+        {
+          userHighId: viewerUserId,
+          userLowId: {
+            in: candidateUserIds,
+          },
+        },
+      ],
+    },
+    select: {
+      userLowId: true,
+      userHighId: true,
+    },
+  });
+
+  return friendships.map((friendship) =>
+    friendship.userLowId === viewerUserId ? friendship.userHighId : friendship.userLowId,
+  );
+}
+
+async function syncChallengeInviteStatusForParticipant(
+  tx: Prisma.TransactionClient,
+  challengeId: string,
+  invitedPlayerId: string,
+  status: ChallengeInviteStatus,
+) {
+  await tx.challengeInvite.updateMany({
+    where: {
+      challengeId,
+      invitedPlayerId,
+      status: ChallengeInviteStatus.PENDING,
+    },
+    data: {
+      status,
+      respondedAt: new Date(),
+    },
+  });
+}
+
+async function upsertChallengeInvitesForFriends(options: {
+  tx: Prisma.TransactionClient;
+  challengeId: string;
+  invitedByUserId: string;
+  candidateUserIds: string[];
+}) {
+  const uniqueCandidateIds = [...new Set(options.candidateUserIds)]
+    .filter((userId) => userId && userId !== options.invitedByUserId);
+
+  if (uniqueCandidateIds.length === 0) {
+    return 0;
+  }
+
+  const acceptedFriendIds = await getAcceptedFriendIds(
+    options.tx,
+    options.invitedByUserId,
+    uniqueCandidateIds,
+  );
+
+  if (acceptedFriendIds.length === 0) {
+    return 0;
+  }
+
+  const participants = await options.tx.challengeParticipant.findMany({
+    where: {
+      challengeId: options.challengeId,
+      userId: {
+        in: acceptedFriendIds,
+      },
+    },
+    select: {
+      userId: true,
+    },
+  });
+  const participantIds = new Set(participants.map((participant) => participant.userId));
+
+  let inviteCount = 0;
+
+  for (const invitedPlayerId of acceptedFriendIds) {
+    if (participantIds.has(invitedPlayerId)) {
+      continue;
+    }
+
+    await options.tx.challengeInvite.upsert({
+      where: {
+        challengeId_invitedPlayerId: {
+          challengeId: options.challengeId,
+          invitedPlayerId,
+        },
+      },
+      update: {
+        invitedByPlayerId: options.invitedByUserId,
+        status: ChallengeInviteStatus.PENDING,
+        respondedAt: null,
+      },
+      create: {
+        challengeId: options.challengeId,
+        invitedPlayerId,
+        invitedByPlayerId: options.invitedByUserId,
+        status: ChallengeInviteStatus.PENDING,
+      },
+    });
+    inviteCount += 1;
+  }
+
+  return inviteCount;
 }
 
 function shuffleParticipants<T>(participants: T[]) {
@@ -148,6 +293,11 @@ function canOpposingTeamReviewResult(options: {
 
 export async function createChallengeAction(formData: FormData) {
   const { appUser } = await requireCompletedProfile();
+  const invitedFriendIds = formData
+    .getAll("invitedFriendIds")
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
   const parsed = createChallengeSchema.safeParse({
     leagueId: formData.get("leagueId"),
     matchFormat: formData.get("matchFormat"),
@@ -208,6 +358,17 @@ export async function createChallengeAction(formData: FormData) {
           id: true,
         },
       });
+
+      if (invitedFriendIds.length > 0) {
+        await prisma.$transaction(async (tx) => {
+          await upsertChallengeInvitesForFriends({
+            tx,
+            challengeId: challenge!.id,
+            invitedByUserId: appUser.id,
+            candidateUserIds: invitedFriendIds,
+          });
+        });
+      }
       break;
     } catch (error) {
       if (
@@ -228,7 +389,9 @@ export async function createChallengeAction(formData: FormData) {
   redirectWithMessage(
     getChallengePath(challenge.id),
     "message",
-    "Reto creado. Ya estas dentro de la mesa.",
+    invitedFriendIds.length > 0
+      ? "Reto creado. Ya puedes empezar a mover la mesa con tus amigos."
+      : "Reto creado. Ya estas dentro de la mesa.",
   );
 }
 
@@ -258,6 +421,12 @@ export async function joinChallengeAction(formData: FormData) {
       }
 
       if (challenge.participants.some((participant) => participant.userId === appUser.id)) {
+        await syncChallengeInviteStatusForParticipant(
+          tx,
+          challenge.id,
+          appUser.id,
+          ChallengeInviteStatus.ACCEPTED,
+        );
         redirectWithMessage(challengePath, "message", "Ya formas parte de este reto.");
       }
 
@@ -278,6 +447,13 @@ export async function joinChallengeAction(formData: FormData) {
           seatIndex: nextSeatIndex,
         },
       });
+
+      await syncChallengeInviteStatusForParticipant(
+        tx,
+        challenge.id,
+        appUser.id,
+        ChallengeInviteStatus.ACCEPTED,
+      );
 
       await tx.challenge.update({
         where: {
@@ -303,6 +479,257 @@ export async function joinChallengeAction(formData: FormData) {
   }
 
   redirectWithMessage(challengePath, "message", "Ya estas apuntado al reto.");
+}
+
+export async function inviteFriendToChallengeAction(formData: FormData) {
+  const { appUser } = await requireCompletedProfile();
+  const parsed = challengeInviteSchema.safeParse({
+    challengeId: formData.get("challengeId"),
+    invitedPlayerId: formData.get("invitedPlayerId"),
+    returnTo: formData.get("returnTo"),
+  });
+  const returnTo = resolveReturnTo(formData, "/matches");
+
+  if (!parsed.success) {
+    redirectWithMessage(returnTo, "error", "No hemos podido enviar la invitacion.");
+  }
+
+  if (parsed.data.invitedPlayerId === appUser.id) {
+    redirectWithMessage(returnTo, "error", "No puedes invitarte a ti mismo.");
+  }
+
+  const prisma = getPrismaClient();
+  const challengePath = getChallengePath(parsed.data.challengeId);
+
+  await prisma.$transaction(async (tx) => {
+    const challenge = await tx.challenge.findUnique({
+      where: {
+        id: parsed.data.challengeId,
+      },
+      include: {
+        league: true,
+        participants: {
+          orderBy: {
+            seatIndex: "asc",
+          },
+        },
+      },
+    });
+
+    if (!challenge) {
+      redirectWithMessage(returnTo, "error", "No hemos encontrado ese reto.");
+    }
+
+    if (!isStatusInList(challenge.status, joinableChallengeStatuses)) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Ese reto ya no admite nuevas invitaciones.",
+      );
+    }
+
+    if (!assertParticipant(appUser.id, challenge.participants)) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Solo quien esta dentro de la mesa puede invitar amigos.",
+      );
+    }
+
+    if (challenge.participants.length >= 4) {
+      redirectWithMessage(
+        challengePath,
+        "error",
+        "La mesa ya esta completa. No puedes invitar a mas jugadores.",
+      );
+    }
+
+    if (challenge.participants.some((participant) => participant.userId === parsed.data.invitedPlayerId)) {
+      redirectWithMessage(challengePath, "message", "Ese jugador ya forma parte del reto.");
+    }
+
+    const invitedCount = await upsertChallengeInvitesForFriends({
+      tx,
+      challengeId: challenge.id,
+      invitedByUserId: appUser.id,
+      candidateUserIds: [parsed.data.invitedPlayerId],
+    });
+
+    if (invitedCount === 0) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Solo puedes invitar a jugadores que ya estan en tu lista de amigos.",
+      );
+    }
+  });
+
+  redirectWithMessage(challengePath, "message", "Invitacion enviada a tu amigo.");
+}
+
+export async function acceptChallengeInviteAction(formData: FormData) {
+  const { appUser } = await requireCompletedProfile();
+  const parsed = challengeInviteResponseSchema.safeParse({
+    inviteId: formData.get("inviteId"),
+    returnTo: formData.get("returnTo"),
+  });
+  const returnTo = resolveReturnTo(formData, "/dashboard");
+
+  if (!parsed.success) {
+    redirectWithMessage(returnTo, "error", "No hemos podido aceptar la invitacion.");
+  }
+
+  const prisma = getPrismaClient();
+  let challengePath = "/matches";
+
+  await prisma.$transaction(async (tx) => {
+    const invite = await tx.challengeInvite.findUnique({
+      where: {
+        id: parsed.data.inviteId,
+      },
+      include: {
+        challenge: {
+          include: {
+            participants: {
+              orderBy: {
+                seatIndex: "asc",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!invite) {
+      redirectWithMessage(returnTo, "error", "Esta invitacion ya no existe.");
+    }
+
+    challengePath = getChallengePath(invite.challengeId);
+
+    if (invite.invitedPlayerId !== appUser.id) {
+      redirectWithMessage(returnTo, "error", "No puedes responder a esta invitacion.");
+    }
+
+    if (invite.status !== ChallengeInviteStatus.PENDING) {
+      redirectWithMessage(challengePath, "message", "Esta invitacion ya estaba respondida.");
+    }
+
+    if (invite.challenge.participants.some((participant) => participant.userId === appUser.id)) {
+      await tx.challengeInvite.update({
+        where: {
+          id: invite.id,
+        },
+        data: {
+          status: ChallengeInviteStatus.ACCEPTED,
+          respondedAt: new Date(),
+        },
+      });
+
+      redirectWithMessage(challengePath, "message", "Ya estabas dentro de esta mesa.");
+    }
+
+    if (!isStatusInList(invite.challenge.status, joinableChallengeStatuses)) {
+      redirectWithMessage(
+        challengePath,
+        "error",
+        "Este reto ya no admite nuevas incorporaciones.",
+      );
+    }
+
+    if (invite.challenge.participants.length >= 4) {
+      redirectWithMessage(
+        challengePath,
+        "error",
+        "La mesa ya esta completa. Si se libera una plaza podras volver a intentarlo.",
+      );
+    }
+
+    const nextSeatIndex = getNextSeatIndex(invite.challenge.participants);
+
+    if (!nextSeatIndex) {
+      redirectWithMessage(
+        challengePath,
+        "error",
+        "La mesa ya esta completa. Si se libera una plaza podras volver a intentarlo.",
+      );
+    }
+
+    await tx.challengeParticipant.create({
+      data: {
+        challengeId: invite.challengeId,
+        userId: appUser.id,
+        seatIndex: nextSeatIndex,
+      },
+    });
+
+    await tx.challengeInvite.update({
+      where: {
+        id: invite.id,
+      },
+      data: {
+        status: ChallengeInviteStatus.ACCEPTED,
+        respondedAt: new Date(),
+      },
+    });
+
+    await tx.challenge.update({
+      where: {
+        id: invite.challengeId,
+      },
+      data: {
+        status:
+          invite.challenge.participants.length + 1 >= 4
+            ? ChallengeStatus.FULL
+            : ChallengeStatus.OPEN,
+      },
+    });
+  });
+
+  redirectWithMessage(challengePath, "message", "Ya estas apuntado al reto.");
+}
+
+export async function declineChallengeInviteAction(formData: FormData) {
+  const { appUser } = await requireCompletedProfile();
+  const parsed = challengeInviteResponseSchema.safeParse({
+    inviteId: formData.get("inviteId"),
+    returnTo: formData.get("returnTo"),
+  });
+  const returnTo = resolveReturnTo(formData, "/dashboard");
+
+  if (!parsed.success) {
+    redirectWithMessage(returnTo, "error", "No hemos podido responder a la invitacion.");
+  }
+
+  const prisma = getPrismaClient();
+  const invite = await prisma.challengeInvite.findUnique({
+    where: {
+      id: parsed.data.inviteId,
+    },
+  });
+
+  if (!invite) {
+    redirectWithMessage(returnTo, "error", "Esta invitacion ya no existe.");
+  }
+
+  if (invite.invitedPlayerId !== appUser.id) {
+    redirectWithMessage(returnTo, "error", "No puedes responder a esta invitacion.");
+  }
+
+  if (invite.status !== ChallengeInviteStatus.PENDING) {
+    redirectWithMessage(returnTo, "message", "Esta invitacion ya estaba respondida.");
+  }
+
+  await prisma.challengeInvite.update({
+    where: {
+      id: invite.id,
+    },
+    data: {
+      status: ChallengeInviteStatus.DECLINED,
+      respondedAt: new Date(),
+    },
+  });
+
+  redirectWithMessage(returnTo, "message", "Has rechazado la invitacion.");
 }
 
 export async function leaveChallengeAction(formData: FormData) {

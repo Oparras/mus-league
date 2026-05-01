@@ -3,6 +3,7 @@ import "server-only";
 import { notFound } from "next/navigation";
 
 import {
+  ChallengeInviteStatus,
   ChallengeStatus,
   LobbyTeamSlot,
   type Prisma,
@@ -125,6 +126,42 @@ export type MatchHistoryItem = Prisma.MatchGetPayload<{
     };
   };
 }>;
+
+export type PendingChallengeInvite = Prisma.ChallengeInviteGetPayload<{
+  include: {
+    invitedByPlayer: {
+      include: {
+        profile: {
+          include: {
+            preferredLeague: true;
+          };
+        };
+      };
+    };
+    challenge: {
+      include: {
+        league: true;
+        participants: {
+          include: {
+            user: true;
+          };
+          orderBy: {
+            seatIndex: "asc";
+          };
+        };
+      };
+    };
+  };
+}>;
+
+export type InvitableChallengeOption = {
+  id: string;
+  locationName: string | null;
+  leagueName: string;
+  participantCount: number;
+  proposedAt: Date | null;
+  inviteStatus: ChallengeInviteStatus | null;
+};
 
 function matchesStatus(
   status: ChallengeStatus,
@@ -510,4 +547,91 @@ export async function getChallengeByInviteCode(
       },
     },
   });
+}
+
+export async function getPendingChallengeInvitesForUser(userId: string) {
+  const prisma = getPrismaClient();
+
+  return prisma.challengeInvite.findMany({
+    where: {
+      invitedPlayerId: userId,
+      status: ChallengeInviteStatus.PENDING,
+    },
+    include: {
+      invitedByPlayer: {
+        include: {
+          profile: {
+            include: {
+              preferredLeague: true,
+            },
+          },
+        },
+      },
+      challenge: {
+        include: {
+          league: true,
+          participants: {
+            include: {
+              user: true,
+            },
+            orderBy: {
+              seatIndex: "asc",
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ createdAt: "desc" }],
+  });
+}
+
+export async function getInvitableChallengesForFriend(
+  viewerUserId: string,
+  friendUserId: string,
+): Promise<InvitableChallengeOption[]> {
+  const prisma = getPrismaClient();
+  const challenges = await prisma.challenge.findMany({
+    where: {
+      status: {
+        in: [...joinableChallengeStatuses],
+      },
+      participants: {
+        some: {
+          userId: viewerUserId,
+        },
+        none: {
+          userId: friendUserId,
+        },
+      },
+    },
+    include: {
+      league: true,
+      participants: {
+        select: {
+          id: true,
+        },
+      },
+      directInvites: {
+        where: {
+          invitedPlayerId: friendUserId,
+        },
+        select: {
+          status: true,
+        },
+        take: 1,
+      },
+    },
+    orderBy: [{ proposedAt: "asc" }, { createdAt: "desc" }],
+  });
+
+  return challenges
+    .filter((challenge) => challenge.participants.length < 4)
+    .map((challenge) => ({
+      id: challenge.id,
+      locationName: challenge.locationName,
+      leagueName: challenge.league.name,
+      participantCount: challenge.participants.length,
+      proposedAt: challenge.proposedAt,
+      inviteStatus: challenge.directInvites[0]?.status ?? null,
+    }));
 }
