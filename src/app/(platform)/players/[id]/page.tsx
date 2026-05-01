@@ -11,6 +11,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { requireCompletedProfile } from "@/lib/auth/session";
+import { openDirectConversationAction } from "@/lib/chat/actions";
 import {
   acceptFriendRequestAction,
   rejectFriendRequestAction,
@@ -155,6 +156,13 @@ export default async function PlayerDetailPage({
               <>
                 <p>Ya forma parte de tu lista de amigos.</p>
                 <div className="flex flex-wrap gap-3">
+                  <form action={openDirectConversationAction}>
+                    <input type="hidden" name="targetUserId" value={player.id} />
+                    <input type="hidden" name="returnTo" value={returnTo} />
+                    <SubmitButton pendingLabel="Abriendo..." variant="outline" className="rounded-full">
+                      Abrir chat
+                    </SubmitButton>
+                  </form>
                   <Link
                     href="/friends"
                     className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full")}

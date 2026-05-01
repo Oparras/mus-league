@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { requireCompletedProfile } from "@/lib/auth/session";
+import { openDirectConversationAction } from "@/lib/chat/actions";
 import {
   acceptFriendRequestAction,
   rejectFriendRequestAction,
@@ -230,6 +231,13 @@ export default async function FriendsPage({
                     >
                       Ver perfil
                     </Link>
+                    <form action={openDirectConversationAction}>
+                      <input type="hidden" name="targetUserId" value={player.userId} />
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <SubmitButton pendingLabel="Abriendo..." variant="outline" className="rounded-full">
+                        Abrir chat
+                      </SubmitButton>
+                    </form>
                     <form action={removeFriendAction}>
                       <input type="hidden" name="targetUserId" value={player.userId} />
                       <input type="hidden" name="returnTo" value={returnTo} />
@@ -316,12 +324,21 @@ export default async function FriendsPage({
                 profileHref={`/players/${player.userId}`}
                 action={
                   player.friendshipStatus === "ACCEPTED" ? (
-                    <Link
-                      href={`/players/${player.userId}`}
-                      className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full")}
-                    >
-                      Ver perfil
-                    </Link>
+                    <>
+                      <Link
+                        href={`/players/${player.userId}`}
+                        className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full")}
+                      >
+                        Ver perfil
+                      </Link>
+                      <form action={openDirectConversationAction}>
+                        <input type="hidden" name="targetUserId" value={player.userId} />
+                        <input type="hidden" name="returnTo" value={returnTo} />
+                        <SubmitButton pendingLabel="Abriendo..." variant="outline" className="rounded-full">
+                          Abrir chat
+                        </SubmitButton>
+                      </form>
+                    </>
                   ) : player.friendshipStatus === "PENDING" &&
                     player.friendshipDirection === "INCOMING" ? (
                     renderAcceptRejectActions(player.userId, returnTo)

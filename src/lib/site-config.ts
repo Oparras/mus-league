@@ -53,6 +53,11 @@ export const platformNav: NavItem[] = [
     description: "Retos abiertos, equipos editables y partidas en curso.",
   },
   {
+    href: "/chat",
+    label: "Chat",
+    description: "Conversaciones directas con amigos y chat de mesa para coordinar partidas.",
+  },
+  {
     href: "/rankings",
     label: "Ranking",
     description: "Tu posicion global y el pulso competitivo de cada zona.",

@@ -132,6 +132,7 @@ npm run prisma:studio
 - Enlace publico `/invite?code=XXXX` para compartir una mesa.
 - Deep link directo a retos y acciones rapidas para WhatsApp.
 - Sistema de amigos e invitaciones directas a retos dentro de la app.
+- Chat 1 a 1 entre amigos y chat de mesa ligado a cada reto.
 
 ## Friends e invitaciones directas
 
@@ -150,6 +151,20 @@ npm run prisma:studio
 - `/dashboard` muestra invitaciones pendientes para aceptar o rechazar sin salir del panel.
 - Si un jugador acepta una invitacion y aun hay plaza, entra automaticamente al reto.
 - Si la mesa ya esta llena, la app muestra un mensaje claro y evita duplicados.
+
+## Chat
+
+- `/chat` actua como bandeja principal de conversaciones.
+- `Conversation` soporta:
+  - `DIRECT`
+  - `CHALLENGE`
+- `ConversationParticipant` controla acceso al hilo.
+- `Message` guarda texto plano, remitente y `createdAt`.
+- Cada reto crea automaticamente su propio chat al abrirse.
+- Cuando un jugador entra en una mesa, tambien entra en su conversacion.
+- Si sale de la mesa antes de arrancar o antes de que termine, deja de ver ese chat porque ya no es participante.
+- `/matches/[id]` muestra la seccion `Chat de la mesa` solo a quienes forman parte del reto.
+- No hay tiempo real todavia: el flujo actual usa Server Actions y refresco de pagina, pero la estructura queda lista para meter realtime mas adelante.
 
 ## Estados del reto
 
@@ -205,7 +220,7 @@ Si `SUPABASE_SERVICE_ROLE_KEY` esta presente, el seed tambien crea o actualiza c
 - `rating` sigue existiendo por compatibilidad y se sincroniza con `elo`.
 - `ChallengeInvite` convive con el enlace publico: puedes compartir una mesa fuera de la app o reservar plaza a amigos concretos dentro de Mus League.
 - `proxy.ts` vive en la raiz para que Next.js 16.2.4 resuelva bien el proxy en un proyecto con `src/app`.
-- Chat, notificaciones y resolucion avanzada de disputas siguen fuera de alcance.
+- El chat ya cubre mensajes basicos, pero siguen fuera de alcance las notificaciones, el tiempo real y la resolucion avanzada de disputas.
 
 ## Documentacion
 

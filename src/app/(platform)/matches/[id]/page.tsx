@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { QueryMessage } from "@/components/auth/query-message";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { ChatThread } from "@/components/chat/chat-thread";
 import { ChallengeLobbyBoard } from "@/components/challenges/challenge-lobby-board";
 import { ChallengeStatusBadge } from "@/components/challenges/challenge-status-badge";
 import { MatchFormatBadge } from "@/components/challenges/match-format-badge";
@@ -12,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { requireCompletedProfile } from "@/lib/auth/session";
+import { getChallengeConversationForUser } from "@/lib/chat/queries";
 import {
   confirmMatchResultAction,
   disputeMatchResultAction,
@@ -45,6 +47,9 @@ export default async function MatchDetailPage({
   const viewerIsParticipant = challenge.participants.some(
     (participant) => participant.userId === appUser.id,
   );
+  const challengeConversation = viewerIsParticipant
+    ? await getChallengeConversationForUser(appUser.id, challenge.id)
+    : null;
   const participantCount = challenge.participants.length;
   const canJoin =
     !viewerIsParticipant &&
@@ -392,6 +397,17 @@ export default async function MatchDetailPage({
                 <p>Hasta que se resuelva, el marcador quedara apartado y no movera el ELO.</p>
               </CardContent>
             </Card>
+          ) : null}
+
+          {viewerIsParticipant && challengeConversation ? (
+            <ChatThread
+              conversation={challengeConversation}
+              viewerUserId={appUser.id}
+              returnTo={`/matches/${challenge.id}`}
+              title="Chat de la mesa"
+              description="Hablad aqui para cuadrar hora, lugar o comentar como ha ido la partida."
+              compact
+            />
           ) : null}
         </div>
       </section>

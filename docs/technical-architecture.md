@@ -2,7 +2,7 @@
 
 ## Goal
 
-The current baseline covers the main Mus League product loop: authenticated access, broad-zone player discovery, reto creation with optional concrete location, editable 2vs2 lobbies, result submission, rival confirmation or dispute, automatic ELO updates and realistic demo data for QA.
+The current baseline covers the main Mus League product loop: authenticated access, broad-zone player discovery, reto creation with optional concrete location, editable 2vs2 lobbies, direct invites, result submission, rival confirmation or dispute, automatic ELO updates, direct chat between friends, challenge chat per table and realistic demo data for QA.
 
 ## Stack decisions
 
@@ -29,6 +29,7 @@ The current baseline covers the main Mus League product loop: authenticated acce
 - `/register` - Supabase sign-up.
 - `/onboarding` - first-time player profile completion.
 - `/dashboard` - current zone, nearby retos, nearby players, current ELO and recent personal movement.
+- `/chat` - inbox for direct conversations and challenge conversations.
 - `/friends` - friend graph, pending requests and player search.
 - `/leagues` - active zone directory.
 - `/leagues/[slug]` - zone detail and player scope.
@@ -50,11 +51,12 @@ src/
     (marketing)/
     (platform)/
     api/health/
-  components/
-    auth/
-    challenges/
-    common/
-    elo/
+    components/
+      auth/
+      chat/
+      challenges/
+      common/
+      elo/
     friends/
     layout/
     leagues/
@@ -98,6 +100,12 @@ docs/
   Stores one record per player pair, including requester, addressee and `PENDING` / `ACCEPTED` / `REJECTED` / `BLOCKED`.
 - `ChallengeInvite`
   Stores direct in-app invites from one player to another for a specific reto.
+- `Conversation`
+  Stores either a direct friend chat or a challenge-linked table chat.
+- `ConversationParticipant`
+  Stores which users can read and write in each conversation.
+- `Message`
+  Stores plain-text messages with sender and `createdAt`.
 - `Match`
   Stores the table created from a reto, result metadata, submitter, confirmer, dispute reason and `eloAppliedAt`.
 - `MatchTeam`
@@ -154,6 +162,12 @@ Current seed hierarchy:
   Handles reto creation, invite-code generation, direct reto invites, joins, lobby assignment, match start, result submission and result confirmation/dispute.
 - `src/lib/challenges/queries.ts`
   Loads reto feeds, reto detail, direct reto invites, invite lookups, nearby retos and match history surfaces.
+- `src/lib/chat/service.ts`
+  Keeps challenge and direct conversations synchronized with joins, leaves and conversation bootstrap.
+- `src/lib/chat/actions.ts`
+  Opens direct chats and sends plain-text messages through Server Actions.
+- `src/lib/chat/queries.ts`
+  Loads conversation lists, active threads and challenge-linked chats.
 - `src/lib/elo/rating.ts`
   Holds the pure ELO math and K-factor map.
 - `src/lib/elo/apply.ts`
@@ -215,6 +229,17 @@ Current seed hierarchy:
    - marks the `ChallengeInvite` as `ACCEPTED`
 7. If the reto is already full, the action stops with a user-facing message and the player is not duplicated into the table.
 8. Public invite links via `/invite?code=XXXX` continue to coexist with direct in-app invites.
+
+## Chat flow
+
+1. A direct conversation is created on demand the first time one friend opens chat with another.
+2. The direct thread is keyed by a stable `directKey`, so the same pair reuses the same conversation.
+3. Every reto creates a `Conversation` of type `CHALLENGE` during reto creation.
+4. When a player joins the reto, the same transaction also inserts `ConversationParticipant`.
+5. When a player leaves the reto, that participant is removed from the challenge conversation and loses access to the thread.
+6. `/chat` shows all conversations available to the authenticated player.
+7. `/matches/[id]` embeds `Chat de la mesa`, but only for current participants.
+8. Messages are plain text and are sent through Server Actions with full page refresh, leaving room for future realtime delivery.
 
 ## Development seed dataset
 
@@ -400,7 +425,7 @@ The current product pass also strengthens readiness around the main flows:
 
 ## Current deliberate gaps
 
-- No chat.
+- No realtime push or websocket delivery for chat yet.
 - No notifications.
 - No automated dispute resolution.
 - No season standings recalculation yet.

@@ -52,6 +52,11 @@ const quickLinks = [
     title: "Abrir amigos",
     description: "Gestiona tu circulo de juego y manda invitaciones directas a tus retos.",
   },
+  {
+    href: "/chat",
+    title: "Ir al chat",
+    description: "Coordina mesas con amigos y sigue el hilo de cada reto sin salir de la app.",
+  },
 ];
 
 export default async function DashboardPage() {

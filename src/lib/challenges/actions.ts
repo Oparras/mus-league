@@ -23,6 +23,11 @@ import {
   validateMatchResultByFormat,
 } from "@/lib/challenges/schemas";
 import { requireCompletedProfile } from "@/lib/auth/session";
+import {
+  addUserToChallengeConversation,
+  ensureChallengeConversation,
+  removeUserFromChallengeConversation,
+} from "@/lib/chat/service";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { applyConfirmedMatchElo } from "@/lib/elo/apply";
 import { z } from "zod";
@@ -370,6 +375,8 @@ export async function createChallengeAction(formData: FormData) {
           });
         }
 
+        await ensureChallengeConversation(tx, createdChallenge.id, [appUser.id]);
+
         return createdChallenge;
       });
       break;
@@ -450,6 +457,8 @@ export async function joinChallengeAction(formData: FormData) {
           seatIndex: nextSeatIndex,
         },
       });
+
+      await addUserToChallengeConversation(tx, challenge.id, appUser.id);
 
       await syncChallengeInviteStatusForParticipant(
         tx,
@@ -665,6 +674,8 @@ export async function acceptChallengeInviteAction(formData: FormData) {
       },
     });
 
+    await addUserToChallengeConversation(tx, invite.challengeId, appUser.id);
+
     await tx.challengeInvite.update({
       where: {
         id: invite.id,
@@ -776,6 +787,8 @@ export async function leaveChallengeAction(formData: FormData) {
         id: viewerParticipant.id,
       },
     });
+
+    await removeUserFromChallengeConversation(tx, challenge.id, appUser.id);
 
     const remainingCount = challenge.participants.length - 1;
 
