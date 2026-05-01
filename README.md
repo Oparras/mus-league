@@ -62,6 +62,7 @@ npm run dev
 - `npm run prisma:push`
 - `npm run prisma:studio`
 - `npm run prisma:seed`
+- `npm run prisma:seed:prod`
 
 ## Variables de entorno
 
@@ -79,6 +80,8 @@ npm run dev
   URL base de la app.
 - `MUSLEAGUE_DEMO_PASSWORD`
   Opcional. Cambia la password que usa el seed para cuentas demo en Supabase Auth.
+- `MUSLEAGUE_ENABLE_DEMO_DATA`
+  Si esta en `true`, el seed crea jugadores demo, retos demo y partidas demo. Si esta en `false`, solo sincroniza las zonas base.
 
 ## Supabase setup
 
@@ -133,6 +136,7 @@ npm run prisma:studio
 - Deep link directo a retos y acciones rapidas para WhatsApp.
 - Sistema de amigos e invitaciones directas a retos dentro de la app.
 - Chat 1 a 1 entre amigos y chat de mesa ligado a cada reto.
+- Centro de notificaciones interno para solicitudes, invitaciones, mensajes y resultados pendientes.
 
 ## Friends e invitaciones directas
 
@@ -165,6 +169,21 @@ npm run prisma:studio
 - Si sale de la mesa antes de arrancar o antes de que termine, deja de ver ese chat porque ya no es participante.
 - `/matches/[id]` muestra la seccion `Chat de la mesa` solo a quienes forman parte del reto.
 - No hay tiempo real todavia: el flujo actual usa Server Actions y refresco de pagina, pero la estructura queda lista para meter realtime mas adelante.
+
+## Notificaciones internas
+
+- El icono superior de avisos muestra cuantas notificaciones siguen pendientes.
+- `/notifications` separa:
+  - pendientes
+  - leidas
+- La app genera avisos para:
+  - solicitudes de amistad recibidas
+  - invitaciones directas a retos
+  - mensajes nuevos en chat
+  - resultados pendientes de confirmar
+  - resultados disputados
+- Al abrir una notificacion, Mus League la marca como leida y te lleva a la pantalla correspondiente.
+- No hay push notifications externas todavia. Todo vive dentro de la app.
 
 ## Estados del reto
 
@@ -203,9 +222,34 @@ K-factor por formato:
 - `VACA_FIRST_TO_3`: `32`
 - `BEST_OF_3_VACAS`: `40`
 
-## Seed demo
+## Seed y datos demo
 
-`npm run prisma:seed` deja preparado un entorno util para QA:
+Por defecto, `.env.example` deja `MUSLEAGUE_ENABLE_DEMO_DATA="false"`. Eso significa que:
+
+- `npm run prisma:seed`
+  solo sincroniza las zonas base:
+  - `Global`
+  - `Madrid Centro`
+  - `Madrid Norte`
+  - `Madrid Sur`
+  - `Madrid Este`
+  - `Madrid Oeste`
+- `npm run prisma:seed:prod`
+  fuerza ese mismo modo minimal aunque tu entorno local tenga otra variable cargada.
+
+Si quieres dataset demo para QA, activa:
+
+```bash
+MUSLEAGUE_ENABLE_DEMO_DATA=true
+```
+
+y luego ejecuta:
+
+```bash
+npm run prisma:seed
+```
+
+Con `MUSLEAGUE_ENABLE_DEMO_DATA=true`, el seed deja preparado un entorno util para QA:
 
 - 8 jugadores de prueba
 - perfiles repartidos por zonas
@@ -215,12 +259,35 @@ K-factor por formato:
 
 Si `SUPABASE_SERVICE_ROLE_KEY` esta presente, el seed tambien crea o actualiza cuentas demo en Supabase Auth. Si no, sigue cargando los datos de producto en Postgres para probar UI y consultas.
 
+## Preparacion para usuarios reales
+
+Antes de abrir la app a usuarios reales:
+
+1. Deja `MUSLEAGUE_ENABLE_DEMO_DATA=false`.
+2. Ejecuta `npm run prisma:seed:prod` para asegurar que solo quedan las zonas base sincronizadas por seed.
+3. Revisa en Supabase que no queden cuentas demo con el dominio `@getmusleague.test`.
+4. Borra solo esas cuentas demo desde `Authentication > Users` en Supabase.
+5. Revisa en la base de datos las filas demo antes de eliminarlas. Una comprobacion util es:
+
+```sql
+select id, email
+from "User"
+where email like '%@getmusleague.test';
+```
+
+6. Si aparecen filas demo, elimina unicamente esas cuentas de app tras revisar backup y dependencias.
+
+Importante:
+
+- El seed en modo produccion no borra usuarios reales automaticamente.
+- No automatizamos limpieza destructiva de Supabase Auth para evitar tocar cuentas reales por error.
+
 ## Notas
 
 - `rating` sigue existiendo por compatibilidad y se sincroniza con `elo`.
 - `ChallengeInvite` convive con el enlace publico: puedes compartir una mesa fuera de la app o reservar plaza a amigos concretos dentro de Mus League.
 - `proxy.ts` vive en la raiz para que Next.js 16.2.4 resuelva bien el proxy en un proyecto con `src/app`.
-- El chat ya cubre mensajes basicos, pero siguen fuera de alcance las notificaciones, el tiempo real y la resolucion avanzada de disputas.
+- El chat ya cubre mensajes basicos y ahora se apoya en avisos internos, pero siguen fuera de alcance el tiempo real, las push notifications externas y la resolucion avanzada de disputas.
 
 ## Documentacion
 

@@ -8,6 +8,7 @@ import {
   FriendshipStatus,
   LobbyTeamSlot,
   MatchStatus,
+  NotificationType,
   Prisma,
 } from "@/generated/prisma/client";
 import { sanitizeRedirectPath } from "@/lib/auth/session";
@@ -30,6 +31,7 @@ import {
 } from "@/lib/chat/service";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { applyConfirmedMatchElo } from "@/lib/elo/apply";
+import { createNotificationsForUserIds } from "@/lib/notifications/service";
 import { z } from "zod";
 
 const teamAssignmentSchema = z.object({
@@ -160,7 +162,7 @@ async function upsertChallengeInvitesForFriends(options: {
     .filter((userId) => userId && userId !== options.invitedByUserId);
 
   if (uniqueCandidateIds.length === 0) {
-    return 0;
+    return [];
   }
 
   const acceptedFriendIds = await getAcceptedFriendIds(
@@ -170,7 +172,7 @@ async function upsertChallengeInvitesForFriends(options: {
   );
 
   if (acceptedFriendIds.length === 0) {
-    return 0;
+    return [];
   }
 
   const participants = await options.tx.challengeParticipant.findMany({
@@ -186,7 +188,7 @@ async function upsertChallengeInvitesForFriends(options: {
   });
   const participantIds = new Set(participants.map((participant) => participant.userId));
 
-  let inviteCount = 0;
+  const invitedPlayerIds: string[] = [];
 
   for (const invitedPlayerId of acceptedFriendIds) {
     if (participantIds.has(invitedPlayerId)) {
@@ -212,10 +214,27 @@ async function upsertChallengeInvitesForFriends(options: {
         status: ChallengeInviteStatus.PENDING,
       },
     });
-    inviteCount += 1;
+    invitedPlayerIds.push(invitedPlayerId);
   }
 
-  return inviteCount;
+  return invitedPlayerIds;
+}
+
+function getChallengeNotificationLabel(challenge: {
+  locationName?: string | null;
+  league?: {
+    name: string;
+  } | null;
+}) {
+  if (challenge.locationName) {
+    return challenge.locationName;
+  }
+
+  if (challenge.league?.name) {
+    return `mesa en ${challenge.league.name}`;
+  }
+
+  return "tu mesa";
 }
 
 function shuffleParticipants<T>(participants: T[]) {
@@ -238,6 +257,11 @@ async function getChallengeForMutation(
       id: challengeId,
     },
     include: {
+      league: {
+        select: {
+          name: true,
+        },
+      },
       participants: {
         orderBy: {
           seatIndex: "asc",
@@ -297,6 +321,24 @@ function canOpposingTeamReviewResult(options: {
   return viewerTeamSlot !== submitterTeamSlot;
 }
 
+function getOpposingParticipantUserIds(
+  participants: {
+    userId: string;
+    teamSlot: LobbyTeamSlot | null;
+  }[],
+  userId: string,
+) {
+  const userTeamSlot = getParticipantTeamSlot(participants, userId);
+
+  if (!userTeamSlot) {
+    return [];
+  }
+
+  return participants
+    .filter((participant) => participant.teamSlot && participant.teamSlot !== userTeamSlot)
+    .map((participant) => participant.userId);
+}
+
 export async function createChallengeAction(formData: FormData) {
   const { appUser } = await requireCompletedProfile();
   const invitedFriendIds = formData
@@ -328,6 +370,7 @@ export async function createChallengeAction(formData: FormData) {
     },
     select: {
       id: true,
+      name: true,
     },
   });
 
@@ -366,8 +409,10 @@ export async function createChallengeAction(formData: FormData) {
           },
         });
 
+        let invitedPlayerIds: string[] = [];
+
         if (invitedFriendIds.length > 0) {
-          await upsertChallengeInvitesForFriends({
+          invitedPlayerIds = await upsertChallengeInvitesForFriends({
             tx,
             challengeId: createdChallenge.id,
             invitedByUserId: appUser.id,
@@ -376,6 +421,20 @@ export async function createChallengeAction(formData: FormData) {
         }
 
         await ensureChallengeConversation(tx, createdChallenge.id, [appUser.id]);
+
+        if (invitedPlayerIds.length > 0) {
+          await createNotificationsForUserIds(tx, {
+            recipientUserIds: invitedPlayerIds,
+            actorUserId: appUser.id,
+            type: NotificationType.CHALLENGE_INVITE,
+            title: "Nueva invitacion a reto",
+            body: `${appUser.displayName} te ha reservado plaza en ${getChallengeNotificationLabel({
+              locationName: parsed.data.locationName,
+              league,
+            })}.`,
+            href: getChallengePath(createdChallenge.id),
+          });
+        }
 
         return createdChallenge;
       });
@@ -560,20 +619,29 @@ export async function inviteFriendToChallengeAction(formData: FormData) {
       redirectWithMessage(challengePath, "message", "Ese jugador ya forma parte del reto.");
     }
 
-    const invitedCount = await upsertChallengeInvitesForFriends({
+    const invitedPlayerIds = await upsertChallengeInvitesForFriends({
       tx,
       challengeId: challenge.id,
       invitedByUserId: appUser.id,
       candidateUserIds: [parsed.data.invitedPlayerId],
     });
 
-    if (invitedCount === 0) {
+    if (invitedPlayerIds.length === 0) {
       redirectWithMessage(
         returnTo,
         "error",
         "Solo puedes invitar a jugadores que ya estan en tu lista de amigos.",
       );
     }
+
+    await createNotificationsForUserIds(tx, {
+      recipientUserIds: invitedPlayerIds,
+      actorUserId: appUser.id,
+      type: NotificationType.CHALLENGE_INVITE,
+      title: "Nueva invitacion a reto",
+      body: `${appUser.displayName} te ha invitado a ${getChallengeNotificationLabel(challenge)}.`,
+      href: challengePath,
+    });
   });
 
   redirectWithMessage(challengePath, "message", "Invitacion enviada a tu amigo.");
@@ -1158,6 +1226,15 @@ export async function submitMatchResultAction(formData: FormData) {
         status: ChallengeStatus.RESULT_SUBMITTED,
       },
     });
+
+    await createNotificationsForUserIds(tx, {
+      recipientUserIds: getOpposingParticipantUserIds(challenge.participants, appUser.id),
+      actorUserId: appUser.id,
+      type: NotificationType.RESULT_PENDING_CONFIRMATION,
+      title: "Resultado pendiente de confirmar",
+      body: `${appUser.displayName} ha enviado el resultado de ${getChallengeNotificationLabel(challenge)}.`,
+      href: challengePath,
+    });
   });
 
   redirectWithMessage(
@@ -1315,6 +1392,15 @@ export async function disputeMatchResultAction(formData: FormData) {
       data: {
         status: ChallengeStatus.DISPUTED,
       },
+    });
+
+    await createNotificationsForUserIds(tx, {
+      recipientUserIds: challenge.participants.map((participant) => participant.userId),
+      actorUserId: appUser.id,
+      type: NotificationType.RESULT_DISPUTED,
+      title: "Resultado en disputa",
+      body: `${appUser.displayName} ha marcado en disputa el resultado de ${getChallengeNotificationLabel(challenge)}.`,
+      href: challengePath,
     });
   });
 

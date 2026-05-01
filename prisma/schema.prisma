@@ -84,6 +84,14 @@ enum ConversationType {
   CHALLENGE
 }
 
+enum NotificationType {
+  FRIEND_REQUEST
+  CHALLENGE_INVITE
+  CHAT_MESSAGE
+  RESULT_PENDING_CONFIRMATION
+  RESULT_DISPUTED
+}
+
 enum MatchFormat {
   POINTS_30
   POINTS_40
@@ -147,6 +155,7 @@ model PlayerProfile {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   preferredLeague  League?  @relation("PreferredLeague", fields: [preferredLeagueId], references: [id], onDelete: SetNull)
   eloHistory       EloHistory[]
+  notifications    Notification[]
 
   @@index([preferredLeagueId])
   @@index([city])
@@ -406,6 +415,22 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+}
+
+model Notification {
+  id              String           @id @default(cuid())
+  playerProfileId String
+  type            NotificationType
+  title           String
+  body            String
+  href            String
+  readAt          DateTime?
+  createdAt       DateTime         @default(now())
+  playerProfile   PlayerProfile    @relation(fields: [playerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([playerProfileId, createdAt])
+  @@index([playerProfileId, readAt, createdAt])
+  @@index([type, createdAt])
 }
 
 model MatchTeam {

@@ -2,11 +2,19 @@
 
 import { redirect } from "next/navigation";
 
-import { FriendshipStatus } from "@/generated/prisma/client";
+import {
+  ConversationType,
+  FriendshipStatus,
+  NotificationType,
+} from "@/generated/prisma/client";
 import { requireCompletedProfile, sanitizeRedirectPath } from "@/lib/auth/session";
 import { ensureDirectConversation } from "@/lib/chat/service";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { getFriendshipPairIds } from "@/lib/friends/queries";
+import {
+  createNotificationsForUserIds,
+  truncateNotificationBody,
+} from "@/lib/notifications/service";
 import { z } from "zod";
 
 const openDirectConversationSchema = z.object({
@@ -104,34 +112,69 @@ export async function sendConversationMessageAction(formData: FormData) {
   }
 
   const prisma = getPrismaClient();
-  const conversation = await prisma.conversation.findFirst({
-    where: {
-      id: parsed.data.conversationId,
-      participants: {
-        some: {
-          userId: appUser.id,
+  await prisma.$transaction(async (tx) => {
+    const conversation = await tx.conversation.findFirst({
+      where: {
+        id: parsed.data.conversationId,
+        participants: {
+          some: {
+            userId: appUser.id,
+          },
         },
       },
-    },
-    select: {
-      id: true,
-    },
-  });
+      select: {
+        id: true,
+        type: true,
+        challenge: {
+          select: {
+            id: true,
+            locationName: true,
+            league: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        participants: {
+          select: {
+            userId: true,
+          },
+        },
+      },
+    });
 
-  if (!conversation) {
-    redirectWithMessage(
-      fallbackPath,
-      "error",
-      "No tienes acceso a esta conversacion o ya no existe.",
-    );
-  }
+    if (!conversation) {
+      redirectWithMessage(
+        fallbackPath,
+        "error",
+        "No tienes acceso a esta conversacion o ya no existe.",
+      );
+    }
 
-  await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      senderId: appUser.id,
-      body: parsed.data.body,
-    },
+    await tx.message.create({
+      data: {
+        conversationId: conversation.id,
+        senderId: appUser.id,
+        body: parsed.data.body,
+      },
+    });
+
+    const title =
+      conversation.type === ConversationType.DIRECT
+        ? `Nuevo mensaje de ${appUser.displayName}`
+        : conversation.challenge?.locationName
+          ? `Nuevo mensaje en ${conversation.challenge.locationName}`
+          : `Nuevo mensaje en ${conversation.challenge?.league.name ?? "tu mesa"}`;
+
+    await createNotificationsForUserIds(tx, {
+      recipientUserIds: conversation.participants.map((participant) => participant.userId),
+      actorUserId: appUser.id,
+      type: NotificationType.CHAT_MESSAGE,
+      title,
+      body: truncateNotificationBody(parsed.data.body),
+      href: `/chat?conversation=${conversation.id}`,
+    });
   });
 
   redirect(fallbackPath);

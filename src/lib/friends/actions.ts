@@ -2,10 +2,11 @@
 
 import { redirect } from "next/navigation";
 
-import { FriendshipStatus } from "@/generated/prisma/client";
+import { FriendshipStatus, NotificationType } from "@/generated/prisma/client";
 import { requireCompletedProfile, sanitizeRedirectPath } from "@/lib/auth/session";
 import { getPrismaClient } from "@/lib/db/prisma";
 import { getFriendshipPairIds } from "@/lib/friends/queries";
+import { createNotificationsForUserIds } from "@/lib/notifications/service";
 import { z } from "zod";
 
 const friendshipActionSchema = z.object({
@@ -118,6 +119,15 @@ export async function sendFriendRequestAction(formData: FormData) {
       },
     });
   }
+
+  await createNotificationsForUserIds(prisma, {
+    recipientUserIds: [parsed.data.targetUserId],
+    actorUserId: appUser.id,
+    type: NotificationType.FRIEND_REQUEST,
+    title: "Nueva solicitud de amistad",
+    body: `${appUser.displayName} quiere jugar contigo en Mus League.`,
+    href: "/friends",
+  });
 
   redirectWithMessage(
     returnTo,

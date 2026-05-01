@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { requireCompletedProfile } from "@/lib/auth/session";
+import { getUnreadNotificationCountForUser } from "@/lib/notifications/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ export default async function PlatformLayout({
   children: ReactNode;
 }) {
   const { appUser, profile } = await requireCompletedProfile();
+  const unreadNotificationCount = await getUnreadNotificationCountForUser(appUser.id);
 
   return (
     <AppShell
@@ -19,6 +21,7 @@ export default async function PlatformLayout({
         avatarUrl: appUser.avatarUrl,
         preferredZone: profile.preferredLeague?.name ?? "Zona por elegir",
       }}
+      unreadNotificationCount={unreadNotificationCount}
     >
       {children}
     </AppShell>

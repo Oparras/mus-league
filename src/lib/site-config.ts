@@ -58,6 +58,11 @@ export const platformNav: NavItem[] = [
     description: "Conversaciones directas con amigos y chat de mesa para coordinar partidas.",
   },
   {
+    href: "/notifications",
+    label: "Avisos",
+    description: "Solicitudes, invitaciones, mensajes y resultados que siguen pendientes.",
+  },
+  {
     href: "/rankings",
     label: "Ranking",
     description: "Tu posicion global y el pulso competitivo de cada zona.",

@@ -2,7 +2,7 @@
 
 ## Goal
 
-The current baseline covers the main Mus League product loop: authenticated access, broad-zone player discovery, reto creation with optional concrete location, editable 2vs2 lobbies, direct invites, result submission, rival confirmation or dispute, automatic ELO updates, direct chat between friends, challenge chat per table and realistic demo data for QA.
+The current baseline covers the main Mus League product loop: authenticated access, broad-zone player discovery, reto creation with optional concrete location, editable 2vs2 lobbies, direct invites, result submission, rival confirmation or dispute, automatic ELO updates, direct chat between friends, challenge chat per table, internal notifications and realistic demo data for QA.
 
 ## Stack decisions
 
@@ -31,6 +31,7 @@ The current baseline covers the main Mus League product loop: authenticated acce
 - `/dashboard` - current zone, nearby retos, nearby players, current ELO and recent personal movement.
 - `/chat` - inbox for direct conversations and challenge conversations.
 - `/friends` - friend graph, pending requests and player search.
+- `/notifications` - internal notification center for pending and read activity.
 - `/leagues` - active zone directory.
 - `/leagues/[slug]` - zone detail and player scope.
 - `/matches` - retos board, create flow and recent confirmed matches.
@@ -71,6 +72,7 @@ src/
     elo/
     friends/
     leagues/
+    notifications/
     profile/
 prisma/
   schema.prisma
@@ -106,6 +108,8 @@ docs/
   Stores which users can read and write in each conversation.
 - `Message`
   Stores plain-text messages with sender and `createdAt`.
+- `Notification`
+  Stores internal player notifications with type, copy, target href and read state.
 - `Match`
   Stores the table created from a reto, result metadata, submitter, confirmer, dispute reason and `eloAppliedAt`.
 - `MatchTeam`
@@ -143,6 +147,7 @@ Current seed hierarchy:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - public Supabase client key.
 - `SUPABASE_SERVICE_ROLE_KEY` - server-only key used by privileged backend helpers.
 - `MUSLEAGUE_DEMO_PASSWORD` - optional password override for demo Auth users created by the seed.
+- `MUSLEAGUE_ENABLE_DEMO_DATA` - controls whether `prisma/seed.ts` should create demo accounts, retos and match history, or just the base zones.
 
 ## Runtime helpers
 
@@ -168,6 +173,12 @@ Current seed hierarchy:
   Opens direct chats and sends plain-text messages through Server Actions.
 - `src/lib/chat/queries.ts`
   Loads conversation lists, active threads and challenge-linked chats.
+- `src/lib/notifications/service.ts`
+  Creates internal notifications for one or many player profiles while excluding the actor.
+- `src/lib/notifications/actions.ts`
+  Marks one or many notifications as read and resolves notification-driven navigation.
+- `src/lib/notifications/queries.ts`
+  Loads unread counts plus the pending/read inbox for the notification center.
 - `src/lib/elo/rating.ts`
   Holds the pure ELO math and K-factor map.
 - `src/lib/elo/apply.ts`
@@ -241,6 +252,19 @@ Current seed hierarchy:
 7. `/matches/[id]` embeds `Chat de la mesa`, but only for current participants.
 8. Messages are plain text and are sent through Server Actions with full page refresh, leaving room for future realtime delivery.
 
+## Notification flow
+
+1. The protected shell loads an unread notification count for the authenticated player and surfaces it in the header.
+2. `/notifications` splits the inbox into pending and read notifications.
+3. Opening a notification marks it as read and redirects to its internal `href`.
+4. Notification producers currently include:
+   - incoming friend requests
+   - direct reto invites
+   - chat messages from other participants
+   - submitted results that still need rival confirmation
+   - disputed results
+5. The actor never receives their own notification for the action they just triggered.
+
 ## Development seed dataset
 
 `prisma/seed.ts` seeds a realistic QA dataset on top of the territorial graph:
@@ -254,10 +278,18 @@ Current seed hierarchy:
 
 The seed supports two modes:
 
-- With `SUPABASE_SERVICE_ROLE_KEY`
+- `MUSLEAGUE_ENABLE_DEMO_DATA=false`
+  Only the territorial graph is synchronized. No demo players, retos, matches or demo Auth users are created.
+- `MUSLEAGUE_ENABLE_DEMO_DATA=true` with `SUPABASE_SERVICE_ROLE_KEY`
   Demo users are created or updated in Supabase Auth and can sign in with `MUSLEAGUE_DEMO_PASSWORD` or the default password.
-- Without `SUPABASE_SERVICE_ROLE_KEY`
+- `MUSLEAGUE_ENABLE_DEMO_DATA=true` without `SUPABASE_SERVICE_ROLE_KEY`
   The same product data is still created in Postgres, but the demo identities remain database-only for UI and query QA.
+
+The production seed path is intentionally non-destructive:
+
+- `npm run prisma:seed:prod` forces the minimal mode.
+- Existing real users are never deleted automatically.
+- Demo cleanup must be reviewed manually in Supabase before going live, filtering only the known demo emails such as `@getmusleague.test`.
 
 ## Zone discovery flow
 

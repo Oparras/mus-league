@@ -1,10 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BellRing,
   Layers3,
   LayoutDashboard,
   Menu,
@@ -18,7 +19,7 @@ import {
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
@@ -36,6 +37,7 @@ const navIcons = {
   "/leagues": Layers3,
   "/matches": Swords,
   "/chat": MessageSquareMore,
+  "/notifications": BellRing,
   "/rankings": Trophy,
   "/profile": UserRound,
   "/friends": Users,
@@ -103,10 +105,16 @@ type AppShellProps = {
     avatarUrl?: string | null;
     preferredZone: string;
   };
+  unreadNotificationCount: number;
 };
 
-export function AppShell({ children, currentUser }: AppShellProps) {
+export function AppShell({
+  children,
+  currentUser,
+  unreadNotificationCount,
+}: AppShellProps) {
   const pathname = usePathname();
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const currentRoute =
     platformNav.find((item) => isActive(pathname, item.href)) ?? platformNav[0];
 
@@ -149,7 +157,7 @@ export function AppShell({ children, currentUser }: AppShellProps) {
         <div className="flex min-h-screen flex-col">
           <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
             <div className="flex h-16 items-center gap-4 px-6 lg:px-10">
-              <Sheet>
+              <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
                 <SheetTrigger
                   render={
                     <Button
@@ -170,7 +178,10 @@ export function AppShell({ children, currentUser }: AppShellProps) {
                     </SheetDescription>
                   </SheetHeader>
                   <div className="px-4 pb-6">
-                    <NavigationList pathname={pathname} />
+                    <NavigationList
+                      pathname={pathname}
+                      onNavigate={() => setIsMobileNavOpen(false)}
+                    />
                   </div>
                 </SheetContent>
               </Sheet>
@@ -188,6 +199,25 @@ export function AppShell({ children, currentUser }: AppShellProps) {
                 <Badge variant="outline" className="hidden rounded-full md:inline-flex">
                   Zona en juego
                 </Badge>
+                <Link
+                  href="/notifications"
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "icon" }),
+                    "relative rounded-full",
+                  )}
+                >
+                  <BellRing className="size-4" />
+                  {unreadNotificationCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                      {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+                    </span>
+                  ) : null}
+                  <span className="sr-only">
+                    {unreadNotificationCount > 0
+                      ? `Abrir notificaciones. Tienes ${unreadNotificationCount} pendientes.`
+                      : "Abrir notificaciones"}
+                  </span>
+                </Link>
                 <Separator orientation="vertical" className="hidden h-8 md:block" />
                 <Link href="/profile" className="flex items-center gap-3">
                   <Avatar size="sm">
