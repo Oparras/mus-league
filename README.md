@@ -131,7 +131,7 @@ npm run prisma:studio
 - Retos 2vs2 con lugar concreto opcional mediante `Challenge.locationName`.
 - Lobby editable para completar equipos antes de empezar.
 - Registro de resultado, confirmacion rival y disputa.
-- ELO real por equipos con historial de cambios.
+- ELO real por parejas con reparto individual ponderado e historial de cambios.
 - Ranking global y por zona.
 - Enlace publico `/invite?code=XXXX` para compartir una mesa.
 - Deep link directo a retos y acciones rapidas para WhatsApp.
@@ -212,7 +212,12 @@ Flujo principal:
 - Cada `PlayerProfile` empieza en `1000`.
 - El ELO del equipo es la media de sus dos jugadores.
 - Se usa la formula ELO estandar.
-- El mismo delta se aplica a ambos miembros del equipo.
+- La probabilidad esperada se calcula siempre por pareja contra pareja.
+- El delta base se obtiene por equipo segun el `K-factor` y el expected score.
+- Ese impacto se reparte de forma individual:
+  - si la pareja gana, el jugador con menor ELO gana mas que su companero con mayor ELO
+  - si la pareja pierde, el jugador con mayor ELO pierde mas que su companero con menor ELO
+- El reparto se normaliza dentro de cada pareja y se limita para evitar saltos absurdos.
 - `Match.eloAppliedAt` evita aplicar ELO dos veces.
 - `EloHistory` guarda `eloBefore`, `eloAfter` y `delta` por jugador y partida.
 

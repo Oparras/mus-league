@@ -1,10 +1,7 @@
 import "server-only";
 
 import { LobbyTeamSlot, MatchFormat, type Prisma } from "@/generated/prisma/client";
-import {
-  calculateMatchEloDelta,
-  calculateTeamAverageElo,
-} from "@/lib/elo/rating";
+import { calculateMatchEloDelta } from "@/lib/elo/rating";
 
 type MatchWithPlayers = Prisma.MatchGetPayload<{
   include: {
@@ -64,28 +61,37 @@ function assertMatchReadyForElo(match: MatchWithPlayers) {
 
 function buildTeamUpdatePayload(options: {
   players: MatchPlayerWithProfile[];
-  delta: number;
+  deltas: number[];
   winnerTeamSlot: LobbyTeamSlot;
   slot: LobbyTeamSlot;
 }) {
   const won = options.slot === options.winnerTeamSlot;
 
-  return options.players.map((player) => {
+  if (options.players.length !== options.deltas.length) {
+    throw new Error("The weighted ELO distribution must produce one delta per player.");
+  }
+
+  return options.players.map((player, index) => {
     const profile = player.user.profile;
+    const delta = options.deltas[index];
 
     if (!profile) {
       throw new Error("Missing player profile while building ELO update payload.");
     }
 
+    if (typeof delta !== "number") {
+      throw new Error("Missing weighted ELO delta for one of the team players.");
+    }
+
     const eloBefore = profile.elo;
-    const eloAfter = Math.round(eloBefore + options.delta);
+    const eloAfter = Math.round(eloBefore + delta);
 
     return {
       playerProfileId: profile.id,
       matchId: player.matchId,
       eloBefore,
       eloAfter,
-      delta: options.delta,
+      delta,
       rating: eloAfter,
       winsIncrement: won ? 1 : 0,
       lossesIncrement: won ? 0 : 1,
@@ -130,28 +136,22 @@ export async function applyConfirmedMatchElo(
 
   const teamAPlayers = getTeamPlayers(match.matchPlayers, LobbyTeamSlot.TEAM_A);
   const teamBPlayers = getTeamPlayers(match.matchPlayers, LobbyTeamSlot.TEAM_B);
-  const teamAElo = calculateTeamAverageElo(
-    teamAPlayers.map((player) => player.user.profile?.elo ?? 1000),
-  );
-  const teamBElo = calculateTeamAverageElo(
-    teamBPlayers.map((player) => player.user.profile?.elo ?? 1000),
-  );
   const ratingChange = calculateMatchEloDelta({
     format: match.format as MatchFormat,
     winnerTeamSlot: match.winnerTeamSlot as LobbyTeamSlot,
-    teamAElo,
-    teamBElo,
+    teamAPlayerElos: teamAPlayers.map((player) => player.user.profile?.elo ?? 1000),
+    teamBPlayerElos: teamBPlayers.map((player) => player.user.profile?.elo ?? 1000),
   });
   const updates = [
     ...buildTeamUpdatePayload({
       players: teamAPlayers,
-      delta: ratingChange.teamADelta,
+      deltas: ratingChange.teamAPlayerDeltas,
       winnerTeamSlot: match.winnerTeamSlot as LobbyTeamSlot,
       slot: LobbyTeamSlot.TEAM_A,
     }),
     ...buildTeamUpdatePayload({
       players: teamBPlayers,
-      delta: ratingChange.teamBDelta,
+      deltas: ratingChange.teamBPlayerDeltas,
       winnerTeamSlot: match.winnerTeamSlot as LobbyTeamSlot,
       slot: LobbyTeamSlot.TEAM_B,
     }),
@@ -203,8 +203,6 @@ export async function applyConfirmedMatchElo(
 
   return {
     eloAppliedAt,
-    teamAElo,
-    teamBElo,
     ...ratingChange,
   };
 }

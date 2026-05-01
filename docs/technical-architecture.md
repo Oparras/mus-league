@@ -180,7 +180,7 @@ Current seed hierarchy:
 - `src/lib/notifications/queries.ts`
   Loads unread counts plus the pending/read inbox for the notification center.
 - `src/lib/elo/rating.ts`
-  Holds the pure ELO math and K-factor map.
+  Holds the pure ELO math, K-factor map and weighted per-player distribution rules.
 - `src/lib/elo/apply.ts`
   Applies confirmed-match ELO updates inside a Prisma transaction.
 - `src/lib/elo/queries.ts`
@@ -377,6 +377,14 @@ Current active chain:
 expected = 1 / (1 + 10 ^ ((opponent - own) / 400))
 ```
 
+### Base delta
+
+- Team delta uses the classic formula:
+
+```text
+delta = K * (actual - expected)
+```
+
 ### Score input
 
 - If `Team A` wins:
@@ -395,7 +403,25 @@ expected = 1 / (1 + 10 ^ ((opponent - own) / 400))
 
 ### Delta application
 
-- The same rounded delta is applied to both players in a team.
+- The expected score stays team-vs-team, but the final player delta is weighted inside each pair.
+- Winner pair weighting:
+
+```text
+weight = teamAverageElo / playerElo
+```
+
+- Losing pair weighting:
+
+```text
+weight = playerElo / teamAverageElo
+```
+
+- After normalizing weights:
+  - lower-rated winners absorb more of the positive delta
+  - higher-rated losers absorb more of the negative delta
+- Individual deltas are rounded to integers.
+- If the match impact is not zero, each player gets at least an absolute delta of `1`.
+- Individual deltas are capped at an absolute value of `60`.
 - Winners increase `wins`.
 - Losers increase `losses`.
 - All four players increase `matchesPlayed`.
@@ -420,7 +446,7 @@ When a result is confirmed, `src/lib/challenges/actions.ts` runs a Prisma transa
 2. Verifies the reviewer belongs to the opposite team.
 3. Marks the match as `VERIFIED`.
 4. Loads the four `MatchPlayer` rows and current player profiles.
-5. Calculates the team averages, expected score and delta.
+5. Calculates the team averages, expected score, base delta and weighted player deltas.
 6. Updates the four `PlayerProfile` rows.
 7. Creates the four `EloHistory` rows.
 8. Writes `eloAppliedAt`.
